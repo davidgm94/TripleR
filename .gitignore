@@ -33,5 +33,9 @@
 # CMake
 cmake-build-debug/*
 
+# Vim
 *~
 *.un
+
+# Shaders
+*.spv

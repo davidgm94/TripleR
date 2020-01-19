@@ -3,6 +3,8 @@
 //
 #include "os/red_os.h"
 #include "os/win32/red_win32.h"
+#define VOLK_IMPLEMENTATION
+#include <volk.h>
 
 #if RRR_WIN32
 WINMAIN_HEADER
