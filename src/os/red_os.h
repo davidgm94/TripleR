@@ -224,6 +224,8 @@ extern "C"
 
 	static os_window_list_entry osWindowListEntry;
 
+	void os_setWindowTitle(os_window_application_pointer windowApplication, const char* title);
+
 // WINDOW LOOP
     bool os_windowShouldClose(os_window_application_pointer windowApplication);
     void os_windowHandleEvents(os_window_application_pointer windowApplication);

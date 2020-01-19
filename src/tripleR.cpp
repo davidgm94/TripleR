@@ -5,13 +5,13 @@
 #include "os/win32/red_win32.h"
 
 #if RRR_WIN32
-int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+WINMAIN_HEADER
 #else
 int main(int argc, const char* argv[])
 #endif
 {
     os_window_dimensions windowDimensions = {1024, 578};
-    os_window_application_pointer os_app = os_startup("Hello", &windowDimensions);
+    os_window_application_pointer os_app = os_startup("RedEngine", &windowDimensions);
 
     while (!os_windowShouldClose(os_app))
     {

@@ -2,6 +2,7 @@
 #pragma once
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#define WINMAIN_HEADER int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 #define QPC(name) i64 name; (void)QueryPerformanceCounter((LARGE_INTEGER*)&name)
 typedef struct
 {
@@ -149,5 +150,11 @@ void os_windowHandleEvents(os_window_application_pointer windowApplication)
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+}
+
+void os_setWindowTitle(os_window_application_pointer windowApplication, const char* title)
+{
+    win32_window_application* win32_windowApplication = (win32_window_application*) windowApplication;
+    (void)SetWindowTextA(win32_windowApplication->handles.window, title);
 }
 #endif
