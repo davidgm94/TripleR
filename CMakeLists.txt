@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.15)
+set (CMAKE_CXX_STANDARD 17)
+project(TripleR)
+add_executable(TripleR WIN32 src/tripleR.cpp)
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
