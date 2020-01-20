@@ -19,7 +19,7 @@ void vk_loadTriangle(vulkan_renderer* vk, os_window_handles* window, os_window_d
 #endif
 	vk->physicalDevice = vk_pickPhysicalDevice(vk->instance);
 	vk->surface = vk_createSurface(vk->allocator, vk->instance, window);
-    vk->extent = (VkExtent2D){ windowDimension->width, windowDimension->height };
+    vk->extent = { windowDimension->width, windowDimension->height };
     vk_fillSwapchainProperties(&vk->swapchainProperties, vk->physicalDevice, vk->surface);
     vk_fillSwapchainRequirements(&vk->swapchainRequirements, &vk->swapchainProperties, &vk->extent);
     VkQueueFlags availableQueues[] = { VK_QUEUE_COMPUTE_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT };

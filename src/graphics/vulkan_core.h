@@ -1,5 +1,6 @@
 #define NV_RTX 0
-#define NV_MESH_SHADING 1
+#define NV_MESH_SHADING 0
+#define VOLK_IMPLEMENTATION
 #include <volk.h>
 #if NDEBUG
 #define VKCHECK(result) (result)
@@ -35,14 +36,15 @@ static inline VkInstance vk_createInstance(VkAllocationCallbacks* allocator)
     VKCHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr));
     assert(instanceLayerCount > 0);
 
-    VkLayerProperties instanceLayers[instanceLayerCount];
-    VKCHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, instanceLayers));
+    //VkLayerProperties instanceLayers[instanceLayerCount];
+    vector<VkLayerProperties> instanceLayers(instanceLayerCount);
+    VKCHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, instanceLayers.data()));
 
     u32 instanceExtensionCount = 0;
     VKCHECK(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, nullptr));
     assert(instanceExtensionCount > 0);
-    VkExtensionProperties extensionProperties[instanceExtensionCount];
-    VKCHECK(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, extensionProperties));
+    vector<VkExtensionProperties> extensionProperties(instanceExtensionCount);
+    VKCHECK(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, extensionProperties.data()));
 
 	OutputDebugStringA("INSTANCE LAYERS:\n");
 	const char* preferredValidationLayer = "VK_LAYER_KHRONOS_validation";
@@ -217,9 +219,10 @@ static inline VkPhysicalDevice vk_pickPhysicalDevice(VkInstance instance)
 {
    	u32 physicalDeviceCount = 0;
 	VKCHECK(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr));
-	VkPhysicalDevice physicalDevices[physicalDeviceCount];
 
+	vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
 	VKCHECK(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, &physicalDevices[0]));
+
 	VkPhysicalDevice physicalDevice = physicalDevices[0];
 
 	// TODO: do picking
@@ -245,7 +248,7 @@ static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysi
 	u32 extensionCount = 0;
 	VKCHECK(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr));
 	os_printf("Device extension count: %d\n", extensionCount);
-	VkExtensionProperties extensions[extensionCount];
+	vector<VkExtensionProperties> extensions(extensionCount);
 	VKCHECK(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, &extensions[0]));
 	os_printf("DEVICE EXTENSIONS\n\n");
 	for (int i = 0; i < extensionCount; i++)
@@ -256,7 +259,7 @@ static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysi
 	u32 layerCount = 0;
 	VKCHECK(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &layerCount, nullptr));
 	os_printf("Device layer count: %d\n", layerCount);
-	VkLayerProperties layers[layerCount];
+	vector<VkLayerProperties> layers(layerCount);
 	VKCHECK(vkEnumerateDeviceLayerProperties(physicalDevice, &layerCount, &layers[0]));
 	os_printf("DEVICE LAYERS\n\n");
 	for (int i = 0; i < layerCount; i++) 
@@ -565,7 +568,7 @@ static inline VkSwapchainKHR vk_createSwapchain(VkAllocationCallbacks* allocator
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: investigate further
     createInfo.queueFamilyIndexCount = 0; // TODO: investigate further
     createInfo.pQueueFamilyIndices = nullptr; // TODO: investigate further
-    createInfo.preTransform = swapchainRequirements->surfaceTransform;
+    createInfo.preTransform = (VkSurfaceTransformFlagBitsKHR) swapchainRequirements->surfaceTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // TODO: investigate further
     createInfo.presentMode = swapchainRequirements->presentMode;
     createInfo.clipped = VK_TRUE; // TODO: investigate further
@@ -628,9 +631,9 @@ static inline void vk_createCommandBuffers(VkDevice device, VkCommandPool comman
 	commandBufferAllocateInfo.level = cmdBufferLvl;
 	commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
 
-	VkCommandBuffer commandBuffersLocal[commandBufferCount];
-	VKCHECK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffersLocal));
-	os_memcpy(commandBufferArray, commandBuffersLocal, sizeof(VkCommandBuffer) * commandBufferCount);
+	vector<VkCommandBuffer> commandBuffersLocal(commandBufferCount);
+	VKCHECK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffersLocal.data()));
+	os_memcpy(commandBufferArray, commandBuffersLocal.data(), sizeof(VkCommandBuffer) * commandBufferCount);
 }
 
 static inline void vk_beginCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferUsageFlags commandBufferUsage, VkRenderPass renderPass, u32 subpass, VkFramebuffer framebuffer, VkQueryPipelineStatisticFlags pipelineStatistics)
@@ -787,12 +790,12 @@ static inline void vk_synchronizeTwoCommandBuffers(VkSemaphore* semaphoreArray1,
 
 	// TODO: maybe these three lines are unnecessary? Remove if so.
 	u32 firstSignalSemaphoreCount = synchronizingSemaphoreCount;
-	VkSemaphore firstSignalSemaphoreArray[firstSignalSemaphoreCount];
-	os_memcpy(firstSignalSemaphoreArray, synchronizingSemaphoreArray, sizeof(VkSemaphore) * firstSignalSemaphoreCount);
+	vector<VkSemaphore> firstSignalSemaphoreArray(firstSignalSemaphoreCount);
+	os_memcpy(firstSignalSemaphoreArray.data(), synchronizingSemaphoreArray, sizeof(VkSemaphore) * firstSignalSemaphoreCount);
 
 	vk_submitCommandsToQueue(semaphoreArray1, semaphoreArray1Count, pipelineStageArray1,
 		queue1, commandBufferArray1, commandBufferCount1,
-		firstSignalSemaphoreArray, firstSignalSemaphoreCount, VK_NULL_HANDLE);
+		firstSignalSemaphoreArray.data(), firstSignalSemaphoreCount, VK_NULL_HANDLE);
 
 	vk_submitCommandsToQueue(synchronizingSemaphoreArray, synchronizingSemaphoreCount, synchronizingPipelineStageArray,
 		queue2, commandBufferArray2, commandBufferArray2Count,
@@ -883,11 +886,11 @@ static inline void vk_bufferMemoryBarrier(
 
 	VkCommandBuffer commandBuffer, VkPipelineStageFlags generatingStages, VkPipelineStageFlags consumingStages)
 {
-	VkBufferMemoryBarrier memoryBarrierArray[bufferCount];
+	vector<VkBufferMemoryBarrier> memoryBarrierArray(bufferCount);
 
 	for (u32 i = 0; i < bufferCount; i++)
 	{
-		memoryBarrierArray[i] = (VkBufferMemoryBarrier)
+		memoryBarrierArray[i] =
 		{
 			VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
 			nullptr,
@@ -902,7 +905,7 @@ static inline void vk_bufferMemoryBarrier(
 	}
 
 	// TODO: check buffer memory barrier array count
-	vkCmdPipelineBarrier(commandBuffer, generatingStages, consumingStages, 0, 0, nullptr, bufferCount, memoryBarrierArray, 0, nullptr);
+	vkCmdPipelineBarrier(commandBuffer, generatingStages, consumingStages, 0, 0, nullptr, bufferCount, memoryBarrierArray.data(), 0, nullptr);
 }
 
 static inline VkBufferView vk_createBufferView(VkAllocationCallbacks* allocator, VkDevice device, VkBuffer buffer, VkFormat bufferFormat, VkDeviceSize memoryOffset, VkDeviceSize memoryRange)
@@ -995,11 +998,11 @@ static inline void vk_imageMemoryBarrier( /* { */
 	/* } */
 	VkCommandBuffer commandBuffer, VkPipelineStageFlags generatingStages, VkPipelineStageFlags consumingStages)
 {
-	VkImageMemoryBarrier memoryBarrierArray[imageCount];
+	vector<VkImageMemoryBarrier> memoryBarrierArray(imageCount);
 
 	for (u32 i = 0; i < imageCount; i++)
 	{
-		memoryBarrierArray[i] = (VkImageMemoryBarrier)
+		memoryBarrierArray[i] =
 		{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
 			nullptr,
@@ -1010,12 +1013,12 @@ static inline void vk_imageMemoryBarrier( /* { */
 			currentQueueFamilyArray[i],
 			newQueueFamilyArray[i],
 			imageArray[i],
-		(VkImageSubresourceRange){aspectArray[i], 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }// TODO:  modify???
+            { aspectArray[i], 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }// TODO:  modify???
 		};
 	}
 
 	// TODO: check image memory barrier array count
-	vkCmdPipelineBarrier(commandBuffer, generatingStages, consumingStages, 0, 0, nullptr, 0, nullptr, imageCount, memoryBarrierArray);
+	vkCmdPipelineBarrier(commandBuffer, generatingStages, consumingStages, 0, 0, nullptr, 0, nullptr, imageCount, memoryBarrierArray.data());
 }
 
 static inline VkImageView vk_createImageView(VkAllocationCallbacks* allocator, VkDevice device, VkImage image, VkImageViewType type, VkFormat format, VkImageAspectFlags aspect)
@@ -1028,8 +1031,8 @@ static inline VkImageView vk_createImageView(VkAllocationCallbacks* allocator, V
 	createInfo.viewType = type;
 	createInfo.format = format;
 	// todo: take a look at these two last options
-	createInfo.components = (VkComponentMapping){ VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
-	createInfo.subresourceRange = (VkImageSubresourceRange){ aspect, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS };
+	createInfo.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+	createInfo.subresourceRange = { aspect, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS };
 
 	VkImageView imageView;
 	VKCHECK(vkCreateImageView(device, &createInfo, allocator, &imageView));
@@ -1056,23 +1059,23 @@ typedef struct
 static inline VulkanImage vk_create2DImage(VkAllocationCallbacks* allocator, VkDevice device, VkPhysicalDeviceMemoryProperties* physicalDeviceMemoryProperties,
 	VkFormat format, VkExtent2D* extent2D, u32 mipmapLevelCount, u32 layerCount, VkSampleCountFlagBits sampleCount, VkImageUsageFlags usage, VkImageAspectFlags aspect, RenderCube renderCube)
 {
-	VkExtent3D extent = (VkExtent3D){ extent2D->width, extent2D->height, 1 };
+	VkExtent3D extent = { extent2D->width, extent2D->height, 1 };
 	VkImage image = vk_createImage(allocator, device, VK_IMAGE_TYPE_2D, format, &extent, mipmapLevelCount, layerCount, sampleCount, usage, renderCube);
 	VkDeviceMemory memory = vk_allocateAndBindToImage(allocator, device, image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	VkImageView imageView = vk_createImageView(allocator, device, image, VK_IMAGE_VIEW_TYPE_2D, format, aspect);
 
-	return (VulkanImage) { image, memory, imageView };
+	return { image, memory, imageView };
 }
 
 static inline VulkanImage vk_createLayered2DImageWithCubemapView(VkAllocationCallbacks* allocator, VkDevice device, VkPhysicalDeviceMemoryProperties* physicalDeviceMemoryProperties,
 	u32 sideExtent, u32 mipmapLevelCount, VkImageUsageFlags usage, VkImageAspectFlags aspect)
 {
-	VkExtent3D extent = (VkExtent3D){ sideExtent, sideExtent, 1 };
-	VkImage image = vk_createImage(allocator, device, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_UNORM, &extent, mipmapLevelCount, 6, VK_SAMPLE_COUNT_1_BIT, usage, true);
+	VkExtent3D extent = { sideExtent, sideExtent, 1 };
+	VkImage image = vk_createImage(allocator, device, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_UNORM, &extent, mipmapLevelCount, 6, VK_SAMPLE_COUNT_1_BIT, usage, RENDER_CUBE_TRUE);
 	VkDeviceMemory memory = vk_allocateAndBindToImage(allocator, device, image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	VkImageView imageView = vk_createImageView(allocator, device, image, VK_IMAGE_VIEW_TYPE_CUBE, VK_FORMAT_R8G8B8A8_UNORM, aspect);
 
-	return (VulkanImage) { image, memory, imageView };
+	return { image, memory, imageView };
 }
 
 static inline void vk_mapAndCopyMemoryToDevice(VkDevice device, VkDeviceMemory hostVisibleMemory, VkDeviceSize offset, VkDeviceSize dataSize, void* data, bool unmap, void** pointerToDeviceLocalMemory)
@@ -1147,26 +1150,28 @@ static inline void vk_updateDeviceLocalMemoryBufferThroughStagingBuffer(VkAlloca
 	VkDeviceMemory stagingBufferMemory = vk_allocateAndBindToBuffer(allocator, device, stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memoryProperties);
 	vk_mapAndCopyMemoryToDevice(device, stagingBufferMemory, 0, dataSize, data, true, nullptr);
 	vk_beginCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr, 0, nullptr, 0);
-	
+
+	u32 queueParameter = VK_QUEUE_FAMILY_IGNORED;
+    VkAccessFlags flag = VK_ACCESS_TRANSFER_WRITE_BIT;
 	vk_bufferMemoryBarrier(&dstBuffer, 1, &dstBufferCurrentAccess,
-		&(VkAccessFlags) {VK_ACCESS_TRANSFER_WRITE_BIT}, &(u32) { VK_QUEUE_FAMILY_IGNORED }, &(u32) { VK_QUEUE_FAMILY_IGNORED },
+                           &flag, &queueParameter, &queueParameter,
 		commandBuffer, dstBufferGeneratingStages, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-	VkBufferCopy bufferCopy = (VkBufferCopy){0, dstOffset, dataSize};
+	VkBufferCopy bufferCopy = {0, dstOffset, dataSize};
 	vk_copyDataBetweenBuffers(commandBuffer, dstBuffer, stagingBuffer, 1, &bufferCopy);
 
 	vk_bufferMemoryBarrier(&dstBuffer, 1,
-		&(VkAccessFlags) { VK_ACCESS_TRANSFER_WRITE_BIT }, &dstBufferNewAccess,
-		&(u32) { VK_QUEUE_FAMILY_IGNORED }, &(u32) { VK_QUEUE_FAMILY_IGNORED },
+                           &flag, &dstBufferNewAccess,
+		&queueParameter, &queueParameter,
 		commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, dstBufferConsumingStages);
 	
 	vk_endCommandBuffer(commandBuffer);
 
-	VkFence fence = vk_createFence(allocator, device, !VK_FENCE_CREATE_SIGNALED_BIT);
+	VkFence fence = vk_createFence(allocator, device, (VkFenceCreateFlagBits)!VK_FENCE_CREATE_SIGNALED_BIT);
 
-	vk_submitCommandsToQueue(nullptr, 0, 0, queue, &(VkCommandBuffer) { commandBuffer }, 1, signalSemaphoreArray, signalSemaphoreCount, fence);
+	vk_submitCommandsToQueue(nullptr, 0, 0, queue, &commandBuffer, 1, signalSemaphoreArray, signalSemaphoreCount, fence);
 
-	vk_waitForFences(device, &(VkFence) { fence }, 1, UINT64_MAX, false);
+	vk_waitForFences(device, &fence, 1, UINT64_MAX, false);
 
 	vkDestroyFence(device, fence, allocator);
 	vkFreeMemory(device, stagingBufferMemory, allocator);
@@ -1188,10 +1193,13 @@ static inline void vk_updateDeviceLocalMemoryImageThroughStagingBuffer(VkAllocat
 	vk_mapAndCopyMemoryToDevice(device, stagingBufferMemory, 0, dataSize, data, true, nullptr);
 	vk_beginCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr, 0, nullptr, 0);
 
+	VkAccessFlags writeFlag = VK_ACCESS_TRANSFER_WRITE_BIT;
+	VkImageLayout imgLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	u32 queueFlag = VK_QUEUE_FAMILY_IGNORED;
 	vk_imageMemoryBarrier(&dstImage, 1,
-		&dstImageCurrentAccess, &(VkAccessFlags) { VK_ACCESS_TRANSFER_WRITE_BIT },
-		& dstImageCurrentLayout, &(VkImageLayout) { VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL },
-		&(u32) { VK_QUEUE_FAMILY_IGNORED }, &(u32) { VK_QUEUE_FAMILY_IGNORED },
+		&dstImageCurrentAccess, &writeFlag,
+		& dstImageCurrentLayout, &imgLayout,
+		&queueFlag, &queueFlag,
 		& dstImageAspect,
 		commandBuffer,
 		dstImageGeneratingStages, VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -1200,20 +1208,20 @@ static inline void vk_updateDeviceLocalMemoryImageThroughStagingBuffer(VkAllocat
 	vk_copyDataFromBufferToImage(commandBuffer, stagingBuffer, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageCopy);
 
 	vk_imageMemoryBarrier(&dstImage, 1,
-		&(VkAccessFlags) { VK_ACCESS_TRANSFER_WRITE_BIT }, &dstImageNewAccess,
+		&writeFlag, &dstImageNewAccess,
 		(VkImageLayout*) VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &dstImageNewLayout,
-		&(u32) { VK_QUEUE_FAMILY_IGNORED }, &(u32) { VK_QUEUE_FAMILY_IGNORED },
+		&queueFlag, &queueFlag,
 		&dstImageAspect,
 		commandBuffer,
 		VK_PIPELINE_STAGE_TRANSFER_BIT, dstImageConsumingStages);
 	
 	vk_endCommandBuffer(commandBuffer);
 
-	VkFence fence = vk_createFence(allocator, device, !VK_FENCE_CREATE_SIGNALED_BIT);
+	VkFence fence = vk_createFence(allocator, device, (VkFenceCreateFlagBits)!VK_FENCE_CREATE_SIGNALED_BIT);
 
-	vk_submitCommandsToQueue(nullptr, 0, 0, queue, &(VkCommandBuffer) { commandBuffer }, 1, signalSemaphoreArray, signalSemaphoreCount, fence);
+	vk_submitCommandsToQueue(nullptr, 0, 0, queue, &commandBuffer, 1, signalSemaphoreArray, signalSemaphoreCount, fence);
 
-	vk_waitForFences(device, &(VkFence) { fence }, 1, UINT64_MAX, false);
+	vk_waitForFences(device, &fence, 1, UINT64_MAX, false);
 
 	vkDestroyFence(device, fence, allocator);
 	vkFreeMemory(device, stagingBufferMemory, allocator);
@@ -1289,7 +1297,7 @@ static inline VulkanImage vk_createSampledImage(VkAllocationCallbacks* allocator
 	VkDeviceMemory memory = vk_allocateAndBindToImage(allocator, device, image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	VkImageView imageView = vk_createImageView(allocator, device, image, imageViewType, format, aspect);
 
-	return (VulkanImage) { image, memory, imageView };
+	return { image, memory, imageView };
 }
 
 typedef struct
@@ -1311,7 +1319,7 @@ static inline VulkanCombinedImageSampler vk_createCombinedImageSampler(VkAllocat
 {
 	VkSampler sampler = vk_createSampler(allocator, device, magFilter, minFilter, mipmapMode, u, v, w, miploadBias, anisotropyEnable, maxAnisotropy, compareEnable, compareOp, minLOD, maxLOD, borderColor, unnormalizedCoordinates);
 	VulkanImage sampledImage = vk_createSampledImage(allocator, device, type, format, extent, mipmapLevelCount, layerCount, samples, usage, renderCube, physicalDeviceMemoryProperties, imageViewType, aspect);
-	return (VulkanCombinedImageSampler) { sampledImage, sampler };
+	return { sampledImage, sampler };
 }
 
 static inline VulkanImage vk_createStorageImage(VkAllocationCallbacks* allocator, VkDevice device,
@@ -1323,7 +1331,7 @@ static inline VulkanImage vk_createStorageImage(VkAllocationCallbacks* allocator
 	VkDeviceMemory memory = vk_allocateAndBindToImage(allocator, device, image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	VkImageView imageView = vk_createImageView(allocator, device, image, imageViewType, format, aspect);
 
-	return (VulkanImage) { image, memory, imageView };
+	return { image, memory, imageView };
 }
 
 typedef struct
@@ -1342,7 +1350,7 @@ static inline VulkanBuffer vk_createUniformTexelBuffer(VkAllocationCallbacks* al
 	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	VkBufferView view = vk_createBufferView(allocator, device, buffer, format, 0, VK_WHOLE_SIZE); 
 
-	return (VulkanBuffer) { buffer, memory, view };
+	return { buffer, memory, view };
 }
 
 static inline VulkanBuffer vk_createStorageTexelBuffer(VkAllocationCallbacks* allocator, VkDevice device,
@@ -1354,7 +1362,7 @@ static inline VulkanBuffer vk_createStorageTexelBuffer(VkAllocationCallbacks* al
 	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	VkBufferView view = vk_createBufferView(allocator, device, buffer, format, 0, VK_WHOLE_SIZE); 
 
-	return (VulkanBuffer) { buffer, memory, view };
+	return { buffer, memory, view };
 }
 
 typedef struct
@@ -1378,7 +1386,7 @@ static inline VulkanBufferWithData vk_createVertexBuffer(VkAllocationCallbacks* 
 	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, physicalDeviceMemoryProperties);
 
-	return (VulkanBufferWithData) { buffer, memory, null, size };
+	return { buffer, memory, null, size };
 }
 
 static inline VulkanBufferWithData vk_createIndexBuffer(VkAllocationCallbacks* allocator, VkDevice device,
@@ -1388,7 +1396,7 @@ static inline VulkanBufferWithData vk_createIndexBuffer(VkAllocationCallbacks* a
 	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, physicalDeviceMemoryProperties);
 
-	return (VulkanBufferWithData) { buffer, memory, null, size };
+	return { buffer, memory, null, size };
 }
 
 static inline VulkanBufferWithData vk_createStorageBuffer(VkAllocationCallbacks* allocator, VkDevice device,
@@ -1398,7 +1406,7 @@ static inline VulkanBufferWithData vk_createStorageBuffer(VkAllocationCallbacks*
 	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, physicalDeviceMemoryProperties);
 
-	return (VulkanBufferWithData) { buffer, memory, null, size };
+	return { buffer, memory, null, size };
 }
 
 static inline VulkanBufferNoView vk_createUniformBuffer(VkAllocationCallbacks* allocator, VkDevice device,
@@ -1408,7 +1416,7 @@ static inline VulkanBufferNoView vk_createUniformBuffer(VkAllocationCallbacks* a
 	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 
-	return (VulkanBufferNoView) { buffer, memory };
+	return { buffer, memory };
 }
 
 // static inline VulkanBufferNoView vk_createStorageBuffer(VkAllocationCallbacks* allocator, VkDevice device,
@@ -1430,7 +1438,7 @@ static inline VulkanImage vk_createInputAttachment(VkAllocationCallbacks* alloca
 	VkDeviceMemory memory = vk_allocateAndBindToImage(allocator, device, image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	VkImageView imageView = vk_createImageView(allocator, device, image, imageViewType, format, aspect);
 
-	return (VulkanImage) { image, memory, imageView };
+	return { image, memory, imageView };
 }
 
 static inline VkDescriptorSetLayout vk_createDescriptorSetLayout(VkAllocationCallbacks* allocator, VkDevice device,
@@ -1808,7 +1816,7 @@ static inline u8* vk_retrieveDataFromPipelineCache(VkAllocationCallbacks* alloca
 	VKCHECK(vkGetPipelineCacheData(device, pipelineCache, &dataSize, null));
 
 	u8* cacheData = null;
-	cacheData = malloc(dataSize);
+	cacheData = (u8*)os_malloc(dataSize);
 
 	VKCHECK(vkGetPipelineCacheData(device, pipelineCache, &dataSize, cacheData));
 
@@ -1824,20 +1832,20 @@ static inline VkPipelineCache vk_mergePipelineCaches(VkDevice device, VkPipeline
 static inline VkPipeline* vk_createGraphicsPipelines(VkAllocationCallbacks* allocator, VkDevice device,
 	VkPipelineCache pipelineCache, u32 pipelineCount, VkPipeline* pipelines)
 {
-	VkGraphicsPipelineCreateInfo createInfos[pipelineCount];
+	vector<VkGraphicsPipelineCreateInfo> createInfos(pipelineCount);
 
 	assert(0);
-	VKCHECK(vkCreateGraphicsPipelines(device, pipelineCache, pipelineCount, createInfos, allocator, pipelines));
+	VKCHECK(vkCreateGraphicsPipelines(device, pipelineCache, pipelineCount, createInfos.data(), allocator, pipelines));
 	return pipelines;
 }
 
 static inline VkPipeline* vk_createComputePipelines(VkAllocationCallbacks* allocator, VkDevice device,
 	VkPipelineCache pipelineCache, u32 pipelineCount, VkPipeline* pipelines)
 {
-	VkComputePipelineCreateInfo createInfos[pipelineCount];
+	vector<VkComputePipelineCreateInfo> createInfos(pipelineCount);
 
 	assert(0);
-	VKCHECK(vkCreateComputePipelines(device, pipelineCache, pipelineCount, createInfos, allocator, pipelines));
+	VKCHECK(vkCreateComputePipelines(device, pipelineCache, pipelineCount, createInfos.data(), allocator, pipelines));
 	return pipelines;
 }
 
@@ -1960,7 +1968,7 @@ static inline void vk_executeCommandBufferInsideAnother(VkCommandBuffer commandB
 
 static inline void vk_presentImage(VkQueue graphicsQueue, VkSemaphore* semaphoreArray, u32 semaphoreCount, VkSwapchainKHR* swapchainArray, u32 swapchainCount, u32* imageIndexArray)
 {
-	VkResult result[swapchainCount];
+	vector<VkResult> result(swapchainCount);
 	VkPresentInfoKHR presentInfo;
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.pNext = nullptr;
@@ -1969,7 +1977,7 @@ static inline void vk_presentImage(VkQueue graphicsQueue, VkSemaphore* semaphore
 	presentInfo.swapchainCount = swapchainCount;
 	presentInfo.pSwapchains = swapchainArray;
 	presentInfo.pImageIndices = imageIndexArray;
-	presentInfo.pResults = result;
+	presentInfo.pResults = result.data();
 
 	VKCHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
 }
@@ -2102,7 +2110,7 @@ static inline VkPipeline vk_createGraphicsPipeline(VkAllocationCallbacks* alloca
 {
 	VkGraphicsPipelineCreateInfo createInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 
-	VkPipelineShaderStageCreateInfo stages[2] = {0};
+	VkPipelineShaderStageCreateInfo stages[2] = {};
 	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
 	stages[0].module = vs;
@@ -2166,7 +2174,7 @@ static inline VkPipeline vk_createMeshGraphicsPipeline(VkAllocationCallbacks* al
 {
 	VkGraphicsPipelineCreateInfo createInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 
-	VkPipelineShaderStageCreateInfo stages[2] = {0};
+	VkPipelineShaderStageCreateInfo stages[2] = {};
 	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 
 #if NV_MESH_SHADING

@@ -5,10 +5,10 @@
 #elif __linux__
 #define RRR_LINUX
 #endif
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+//#ifdef __cplusplus
+// extern "C"
+//{
+// #endif
 #if _WIN64
 #if _DEBUG
 #define NDEBUG 0
@@ -18,24 +18,24 @@ extern "C"
 #else
 #endif
 
-#define FORCE_INLINE 0
-
-#if _MSC_VER
-
-#if FORCE_INLINE
-#define inline __forceinline
-#else
-#define inline inline
-#endif
-
-#elif __GNUC__
-#if FORCE_INLINE
-#define inline inline __attribute__((always_inline))
-#else
-#define inline inline
-#endif
-
-#endif
+// #define FORCE_INLINE 0
+//
+// #if _MSC_VER
+//
+// #if FORCE_INLINE
+// #define inline __forceinline
+// #else
+// #define inline inline
+// #endif
+//
+// #elif __GNUC__
+// #if FORCE_INLINE
+// #define inline inline __attribute__((always_inline))
+// #else
+// #define inline inline
+// #endif
+//
+//#endif
 
 #define ARRAYCOUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -69,6 +69,8 @@ extern "C"
 #define MEGABYTE (1024 * KILOBYTE)
 #define GIGABYTE (1024 * MEGABYTE)
 
+#include <vector>
+    using std::vector;
 // ASSERT
 #include <assert.h>
 
@@ -511,6 +513,6 @@ static inline raw_str os_readFile(const char* fileFullPath)
 os_window_application_pointer os_startup(const char* windowTitle, os_window_dimensions* windowDimensions);
 os_window_handles os_getWindowHandles(os_window_application_pointer windowApplication);
 os_window_dimensions os_getWindowDimensions(os_window_application_pointer windowApplication);
-#ifdef __cplusplus
-}
-#endif
+// #ifdef __cplusplus
+// }
+// #endif

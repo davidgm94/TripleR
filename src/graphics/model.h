@@ -1,4 +1,5 @@
-#include <indexgenerator.h>
+#include <indexgenerator.cpp>
+#define FAST_OBJ_IMPLEMENTATION
 #include <fast_obj.h>
 typedef struct
 {
@@ -131,7 +132,7 @@ void buildMeshlets(Mesh_with_meshlets* mesh)
 	const u64 meshIndexCount = mesh->indices.size;
 
 	void* ptr = os_malloc(700 * 1024 * 1024);
-	mesh->meshlets.data = ptr;
+	mesh->meshlets.data = (Meshlet*) ptr;
 
 	for (u64 i = 0; i < meshIndexCount; i+= 3)
 	{
