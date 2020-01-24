@@ -15,6 +15,10 @@ int main(int argc, const char* argv[])
     os_window_application_pointer os_app = os_startup("RedEngine", &windowDimensions);
     os_window_handles handles = os_getWindowHandles(os_app);
 
+    os_fillCurrentWorkingDirectory();
+    os_fillShadersDirectory();
+    os_fillAssetsDirectory();
+
     vulkan_renderer vk;
     vk_load(&vk, &handles, &windowDimensions);
 

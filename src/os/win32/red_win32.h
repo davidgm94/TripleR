@@ -157,4 +157,69 @@ void os_setWindowTitle(os_window_application_pointer windowApplication, const ch
     win32_window_application* win32_windowApplication = (win32_window_application*) windowApplication;
     (void)SetWindowTextA(win32_windowApplication->handles.window, title);
 }
+
+#include <direct.h>
+#include <Shlwapi.h>
+
+static void os_getCurrentWorkingDirectory(char* path)
+{
+    GetCurrentDirectoryA(MAX_FILENAME_LENGTH, path);
+}
+
+static void os_getParentDirectory(char* path)
+{
+    PathRemoveFileSpecA(path);
+}
+
+static void os_appendFileOrDirectory(char* path, const char* pathToAppend)
+{
+    PathAddBackslashA(path);
+    PathAppendA(path, pathToAppend);
+}
+
+static void os_fillCurrentWorkingDirectory(void)
+{
+    char buffer[MAX_FILENAME_LENGTH];
+    os_getCurrentWorkingDirectory(buffer);
+    os_printf("GetCurrentDirectoryA: %s\n", buffer);
+    os_getParentDirectory(buffer);
+    os_appendFileOrDirectory(buffer, "src");
+    os_strcpy(sourceDirectory, buffer);
+
+    os_printf("%s\n", sourceDirectory);
+}
+
+
+static void os_fillShadersDirectory(void)
+{
+    char buffer[1000];
+    os_strcpy(buffer, sourceDirectory);
+    os_appendFileOrDirectory(buffer, "graphics");
+    os_appendFileOrDirectory(buffer, "shaders");
+    os_printf("shaderDirectory: %s\n", buffer);
+    os_strcpy(shaderDirectory, buffer);
+}
+
+static void os_fillAssetsDirectory(void)
+{
+    char buffer[1000];
+    os_strcpy(buffer, sourceDirectory);
+    os_getParentDirectory(buffer);
+    os_appendFileOrDirectory(buffer, "assets");
+    os_printf("assets directory: %s\n", buffer);
+    os_strcpy(assetDirectory, buffer);
+}
+
+static void os_getShaderPath(const char* shaderName, char* buffer)
+{
+    os_strcpy(buffer, shaderDirectory);
+    os_appendFileOrDirectory(buffer, shaderName);
+}
+
+static void os_getAssetPath(const char* assetName, char* buffer)
+{
+    os_strcpy(buffer, assetDirectory);
+    os_appendFileOrDirectory(buffer, assetName);
+}
+
 #endif

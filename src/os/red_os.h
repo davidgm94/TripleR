@@ -1,5 +1,9 @@
 #pragma once
 
+#define MAX_FILENAME_LENGTH 1024
+static char sourceDirectory[MAX_FILENAME_LENGTH];
+static char shaderDirectory[MAX_FILENAME_LENGTH];
+static char assetDirectory[MAX_FILENAME_LENGTH];
 #if _WINDOWS
 #define RRR_WIN32 1
 #elif __linux__
@@ -162,6 +166,14 @@
 
 // STRING
 #include <string.h>
+    static inline char* os_strtok(char* str, const char* delimiters)
+    {
+	   return strtok(str, delimiters);
+    }
+    static inline char* os_strcat(char* destination, const char* source)
+    {
+	    return strcat(destination, source);
+    }
 	static inline char* os_strcpy(char* destination, const char* source)
 	{
 		return strcpy(destination, source);

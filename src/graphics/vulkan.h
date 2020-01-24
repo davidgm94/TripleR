@@ -96,14 +96,18 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 	vk_createImageMemoryBarriers(vk->beginRenderBarriers, vk->swapchainImages, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vk_createImageMemoryBarriers(vk->endRenderBarriers, vk->swapchainImages, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	vk->queryPool = vk_createTimestampQueryPool(vk->allocator, vk->device, 128);
-
-	vk->currentMesh = loadMesh("data/kitten.obj");
-	raw_str vsFile = os_readFile("src/graphics/shaders/model.vert.spv");
-	raw_str fsFile = os_readFile("src/graphics/shaders/model.frag.spv");
+    char vertexShaderPath[MAX_FILENAME_LENGTH];
+    os_getShaderPath("model.vert.spv", vertexShaderPath);
+    char fragmentShaderPath[MAX_FILENAME_LENGTH];
+    os_getShaderPath("model.frag.spv", fragmentShaderPath);
+    raw_str vsFile = os_readFile(vertexShaderPath);
+	raw_str fsFile = os_readFile(fragmentShaderPath);
 	vk->meshPipeline.vs = vk_createShaderModule(vk->allocator, vk->device, vsFile.data, vsFile.size);
 	vk->meshPipeline.fs = vk_createShaderModule(vk->allocator, vk->device, fsFile.data, fsFile.size);
 #if NV_MESH_SHADING
-	raw_str msFile = os_readFile("src/graphics/shaders/model.mesh.spv");
+    char meshShaderPath[MAX_FILENAME_LENGTH];
+    os_getShaderPath("model.mesh.spv", meshShaderPath);
+	raw_str msFile = os_readFile(meshShaderPath);
 	vk->meshPipeline.ms = vk_createShaderModule(vk->allocator, vk->device, msFile.data, msFile.size);
 	os_free(msFile.data);
 #endif
@@ -148,7 +152,9 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 	vk_createCommandPools(vk->allocator, vk->device, vk->commandPools, vk->swapchainProperties.queueFamily.indices);
 	vk_createCommandBuffers(vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], IMAGE_COUNT, vk->commandBuffers);
 
-	vk->currentMesh = loadMesh("data/kitten.obj");
+	char meshPath[MAX_FILENAME_LENGTH];
+	os_getAssetPath("kitten.obj", meshPath);
+	vk->currentMesh = loadMesh(meshPath);
 
 	size_t size = 128 * 1024 * 1024;
 
