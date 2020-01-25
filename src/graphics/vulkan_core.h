@@ -586,7 +586,7 @@ static inline VkSwapchainKHR vk_createSwapchain(VkAllocationCallbacks* allocator
     createInfo.pQueueFamilyIndices = &swapchainRequirements->graphicsQueueFamilyIndex; // TODO: investigate further
     createInfo.preTransform = (VkSurfaceTransformFlagBitsKHR) swapchainRequirements->surfaceTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // TODO: investigate further
-    createInfo.presentMode = swapchainRequirements->presentMode;
+    createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
     createInfo.clipped = VK_TRUE; // TODO: investigate further
     createInfo.oldSwapchain = oldSwapchain;
     

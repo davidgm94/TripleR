@@ -182,7 +182,11 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 
 void vk_renderModelNVMesh(vulkan_renderer* vk)
 {
+    static double frameAvgCPU = 0;
+    static double frameAvgGPU = 0;
+
 	QPC(startFramePC);
+
 	u32 currentImageIndex = vk_acquireNextImage(vk->device, vk->swapchain, vk->imageAcquireSemaphore);
 	VKCHECK(vkResetCommandPool(vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], 0));
 
@@ -303,9 +307,13 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
 	static char buffer[512];
 
 	u64 frameGPUC = queryResults[1] - queryResults[0];
-	const float timestampPeriod = vk->swapchainProperties.physicalDeviceProperties.limits.timestampPeriod;
+	const float timestampHelper = vk->swapchainProperties.physicalDeviceProperties.limits.timestampPeriod;
+	static float timestampPeriod = timestampHelper;
 	double frameGPU = frameGPUC * timestampPeriod * 1e-6;
-	os_sprintf(buffer, "[Red Engine] Frametime. CPU: %.02f ms. GPU: %.02f ms.", frameCPU, frameGPU);
+
+	frameAvgCPU = frameAvgCPU * 0.95 + frameCPU * 0.05;
+    frameAvgGPU = frameAvgGPU * 0.95 + frameGPU * 0.05;
+	os_sprintf(buffer, "[Red Engine] Frametime. CPU: %.02f ms. GPU: %.02f ms.", frameAvgCPU, frameAvgGPU);
 	SetWindowTextA(win32.handles.window, buffer);
 }
 
