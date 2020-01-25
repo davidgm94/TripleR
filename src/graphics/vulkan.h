@@ -73,19 +73,20 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 	vk->physicalDevice = vk_pickPhysicalDevice(vk->instance);
 	vk->surface = vk_createSurface(vk->allocator, vk->instance, window);
     vk->extent = { windowDimension->width, windowDimension->height };
-    vk_fillSwapchainProperties(&vk->swapchainProperties, vk->physicalDevice, vk->surface);
-    vk_fillSwapchainRequirements(&vk->swapchainRequirements, &vk->swapchainProperties, &vk->extent);
+
     VkQueueFlags availableQueues[] = { VK_QUEUE_COMPUTE_BIT, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT };
     VkQueueFlags queuesToCreate = 0;
-	const float priorities[] = { 0.0f };
+    const float priorities[] = { 0.0f };
     u32 availableQueueCount = ARRAYCOUNT(availableQueues);
     for (u32 i = 0; i < availableQueueCount; i++)
     {
-	   queuesToCreate |= availableQueues[i];
+        queuesToCreate |= availableQueues[i];
     }
+    vk_fillSwapchainProperties(&vk->swapchainProperties, vk->physicalDevice, vk->surface);
+    VkDeviceQueueCreateInfo queueCreateInfoArray[ARRAYCOUNT(availableQueues)];
+    vk_setupQueueCreation(queueCreateInfoArray, &vk->swapchainProperties.queueFamily, queuesToCreate, priorities);
+    vk_fillSwapchainRequirements(&vk->swapchainRequirements, &vk->swapchainProperties, &vk->extent);
 
-	VkDeviceQueueCreateInfo queueCreateInfoArray[ARRAYCOUNT(availableQueues)];
-	vk_setupQueueCreation(queueCreateInfoArray, &vk->swapchainProperties.queueFamily, queuesToCreate, priorities);
 	vk->device = vk_createDevice(vk->allocator, vk->physicalDevice, vk->instance, queueCreateInfoArray, ARRAYCOUNT(queueCreateInfoArray));
 	vk->renderPass = vk_setupRenderPass(vk->allocator, vk->device, vk->swapchainRequirements.surfaceFormat.format);
 	vk_getDeviceQueues(vk->device, vk->swapchainProperties.queueFamily.indices, vk->queues);

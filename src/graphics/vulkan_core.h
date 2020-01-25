@@ -36,7 +36,6 @@ static inline VkInstance vk_createInstance(VkAllocationCallbacks* allocator)
     VKCHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr));
     assert(instanceLayerCount > 0);
 
-    //VkLayerProperties instanceLayers[instanceLayerCount];
     vector<VkLayerProperties> instanceLayers(instanceLayerCount);
     VKCHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, instanceLayers.data()));
 
@@ -46,7 +45,7 @@ static inline VkInstance vk_createInstance(VkAllocationCallbacks* allocator)
     vector<VkExtensionProperties> extensionProperties(instanceExtensionCount);
     VKCHECK(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, extensionProperties.data()));
 
-	OutputDebugStringA("INSTANCE LAYERS:\n");
+	os_printf("\nINSTANCE LAYERS:\n");
 	const char* preferredValidationLayer = "VK_LAYER_KHRONOS_validation";
 	const char* notPreferredValidationLayer = "VK_LAYER_LUNARG_standard_validation";
 	char* validationLayer = null;
@@ -57,16 +56,16 @@ static inline VkInstance vk_createInstance(VkAllocationCallbacks* allocator)
 		{
 			preferredValidationLayerPresent = true;
 		}
-		OutputDebugStringA(instanceLayers[i].layerName);
-		OutputDebugStringA(": ");
-		OutputDebugStringA(instanceLayers[i].description);
-		OutputDebugStringA("\n");
+		os_printf(instanceLayers[i].layerName);
+		os_printf(": ");
+		os_printf(instanceLayers[i].description);
+		os_printf("\n");
 	}
-	OutputDebugStringA("EXTENSION LAYERS:\n");
+	os_printf("INSTANCE EXTENSIONS:\n");
 	for (int i = 0; i < instanceExtensionCount; i++)
 	{
-		OutputDebugStringA(extensionProperties[i].extensionName);
-		OutputDebugStringA("\n");
+		os_printf(extensionProperties[i].extensionName);
+		os_printf("\n");
 	}
 
 	if (preferredValidationLayerPresent)
@@ -86,8 +85,23 @@ static inline VkInstance vk_createInstance(VkAllocationCallbacks* allocator)
 	{
 		VK_KHR_SURFACE_EXTENSION_NAME,
 		VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#if NDEBUG == 0
 		VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+#endif
 	};
+
+
+    os_printf("\nENABLED INSTANCE LAYERS:\n");
+    for (u32 i = 0; i < ARRAYCOUNT(enabledLayers); i++)
+    {
+        os_printf("%s\n", enabledLayers[i]);
+    }
+	os_printf("ENABLED INSTANCE EXTENSIONS:\n");
+	for (u32 i = 0; i < ARRAYCOUNT(enabledExtensions); i++)
+    {
+	    os_printf("%s\n", enabledExtensions[i]);
+	}
+	os_printf("\n");
 
     VkInstanceCreateInfo createInfo;
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -106,7 +120,7 @@ static inline VkInstance vk_createInstance(VkAllocationCallbacks* allocator)
     return instance;
 }
 
-#if _DEBUG
+#if NDEBUG == 0
 VkBool32 vk_debugCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, u64 object,
     size_t location, int messageCode, const char* pLayerPrefix, const char* pMessage,
     void* pUserData)
@@ -146,13 +160,10 @@ VkBool32 vk_debugCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEX
     }
 
     // Display message to default output (console/logcat)
-    char debugMessage[4096];
+    static char debugMessage[4096];
     os_sprintf(debugMessage, "%s [%s] Code %d:%s\n", prefix, pLayerPrefix, messageCode, pMessage);
 
-	os_printf("%s", debugMessage);
-#ifdef _WIN64
-    OutputDebugStringA(debugMessage);
-#endif
+	os_printf(debugMessage);
 
     fflush(stdout);
     // The return value of this callback controls wether the Vulkan call that caused
@@ -273,29 +284,33 @@ static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysi
 		VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 		VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
 		VK_KHR_8BIT_STORAGE_EXTENSION_NAME,
+        VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
 #if NV_MESH_SHADING
 		VK_NV_MESH_SHADER_EXTENSION_NAME,
 #endif
 	};
 
+	os_printf("\nENABLED DEVICE EXTENSIONS:\n");
+	for (u32 i = 0; i < ARRAYCOUNT(enabledExtensions); i++)
+    {
+	    os_printf("%s\n", enabledExtensions[i]);
+    }
+	os_printf("\n");
 
-	VkPhysicalDeviceFeatures2 features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    VkPhysicalDeviceFeatures2 features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 
-	VkPhysicalDevice16BitStorageFeatures features16 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES };
-	features16.storageBuffer16BitAccess = true;
+    VkPhysicalDevice16BitStorageFeatures features16 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES };
+    features16.storageBuffer16BitAccess = true;
 
-	VkPhysicalDevice8BitStorageFeaturesKHR features8 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR };
-	features8.storageBuffer8BitAccess = true;
-	features8.uniformAndStorageBuffer8BitAccess = true;
+    VkPhysicalDevice8BitStorageFeaturesKHR features8 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR };
+    features8.storageBuffer8BitAccess = true;
+    features8.uniformAndStorageBuffer8BitAccess = true; // TODO: this seems like a glslang bug, we need to investigate & file this
 
-	// VkPhysicalDeviceShaderFloat16Int8FeaturesKHR featuresShaderfp16int8 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR };
-	// featuresfp16int8.shaderInt8 = true;
-	VkPhysicalDeviceFloat16Int8FeaturesKHR featuresfp16int8 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR };
-	featuresfp16int8.shaderInt8 = true;
+    VkPhysicalDeviceFloat16Int8FeaturesKHR featuresf16i8 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR };
+    featuresf16i8.shaderInt8 = true;
 
-	
 #if NV_MESH_SHADING
-	VkPhysicalDeviceMeshShaderFeaturesNV featuresMesh = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV };
+    VkPhysicalDeviceMeshShaderFeaturesNV featuresMesh = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV };
 	featuresMesh.meshShader = true;
 #endif
 
@@ -310,16 +325,15 @@ static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysi
     createInfo.enabledExtensionCount = ARRAYCOUNT(enabledExtensions);
     createInfo.ppEnabledExtensionNames = enabledExtensions;
     createInfo.pEnabledFeatures = null;
-	features.pNext = &features16;
-	features16.pNext = &features8;
-	features8.pNext = &featuresfp16int8;
+    createInfo.pNext = &features;
+    features.pNext = &features16;
+    features16.pNext = &features8;
+    features8.pNext = &featuresf16i8;
+
 #if NV_MESH_SHADING
-	featuresfp16int8.pNext = &featuresMesh;
-	featuresMesh.pNext = null;
-#else
-	featuresfp16int8.pNext = null;
+    featuresf16i8.pNext = &featuresMesh;
 #endif
-	
+
 	VkDevice device;
 	VKCHECK(vkCreateDevice(physicalDevice, &createInfo, allocator, &device));
 
@@ -503,12 +517,13 @@ typedef struct
     VkImageUsageFlags imageUsage;
     VkSurfaceTransformFlagsKHR surfaceTransform;
     u32 minImageCount;
+    u32 graphicsQueueFamilyIndex;
 }
 swapchain_requirements;
 
 static inline VkSurfaceFormatKHR vk_pickSurfaceFormat(const VkSurfaceFormatKHR* surfaceFormats, u32 surfaceFormatCount)
 {
-    VkSurfaceFormatKHR pickedSurfaceFormat = {0};
+    VkSurfaceFormatKHR pickedSurfaceFormat = {};
     if (surfaceFormatCount == 1 && surfaceFormats[0].format == VK_FORMAT_UNDEFINED)
     {
 	   pickedSurfaceFormat.format = VK_FORMAT_UNDEFINED;
@@ -542,6 +557,7 @@ static inline void vk_fillSwapchainRequirements(swapchain_requirements* swapchai
     swapchainRequirements->imageUsage = vk_getImageUsage(swapchainProperties->surfaceCapabilities.supportedUsageFlags, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     swapchainRequirements->surfaceTransform = vk_pickImageTransformation(&swapchainProperties->surfaceCapabilities, VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR); // TODO: investigate further
     swapchainRequirements->minImageCount = vk_pickImageCount(&swapchainProperties->surfaceCapabilities);
+    swapchainRequirements->graphicsQueueFamilyIndex = swapchainProperties->queueFamily.indices[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS];
 }
 
 static inline void vk_getDeviceQueues(VkDevice device, u32* queueFamilyIndices, VkQueue* queues)  
@@ -564,10 +580,10 @@ static inline VkSwapchainKHR vk_createSwapchain(VkAllocationCallbacks* allocator
     createInfo.imageColorSpace = swapchainRequirements->surfaceFormat.colorSpace;
     createInfo.imageExtent = swapchainRequirements->imageExtent;
     createInfo.imageArrayLayers = 1; // TODO: investigate further
-    createInfo.imageUsage = swapchainRequirements->imageUsage;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: investigate further
-    createInfo.queueFamilyIndexCount = 0; // TODO: investigate further
-    createInfo.pQueueFamilyIndices = nullptr; // TODO: investigate further
+    createInfo.queueFamilyIndexCount = 1;
+    createInfo.pQueueFamilyIndices = &swapchainRequirements->graphicsQueueFamilyIndex; // TODO: investigate further
     createInfo.preTransform = (VkSurfaceTransformFlagBitsKHR) swapchainRequirements->surfaceTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // TODO: investigate further
     createInfo.presentMode = swapchainRequirements->presentMode;
@@ -598,7 +614,7 @@ static inline u32 vk_acquireNextImage(VkDevice device, VkSwapchainKHR swapchain,
 static inline VkCommandPool vk_createCommandPool(VkAllocationCallbacks* allocator, VkDevice device, u32 queueFamilyIndex)
 {
 	// TODO: maybe take a look at these options
-	VkCommandPoolCreateFlags commandPoolCreateFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	VkCommandPoolCreateFlags commandPoolCreateFlags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 	VkCommandPoolCreateInfo createInfo;
 	createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	createInfo.pNext = nullptr;
@@ -2146,7 +2162,7 @@ static inline VkPipeline vk_createGraphicsPipeline(VkAllocationCallbacks* alloca
 	VkPipelineDepthStencilStateCreateInfo depthStencilState = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
 	createInfo.pDepthStencilState = &depthStencilState;
 
-	VkPipelineColorBlendAttachmentState colorAttachmentState = {0};
+	VkPipelineColorBlendAttachmentState colorAttachmentState = {};
 	colorAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
 	VkPipelineColorBlendStateCreateInfo colorBlendState = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
@@ -2217,9 +2233,8 @@ static inline VkPipeline vk_createMeshGraphicsPipeline(VkAllocationCallbacks* al
 	VkPipelineDepthStencilStateCreateInfo depthStencilState = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
 	createInfo.pDepthStencilState = &depthStencilState;
 
-	VkPipelineColorBlendAttachmentState colorAttachmentState = {0};
+	VkPipelineColorBlendAttachmentState colorAttachmentState = {};
 	colorAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
 	VkPipelineColorBlendStateCreateInfo colorBlendState = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
 	colorBlendState.attachmentCount = 1;
 	colorBlendState.pAttachments = &colorAttachmentState;

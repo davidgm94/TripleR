@@ -1,23 +1,28 @@
 cmake_minimum_required(VERSION 3.15)
 set (CMAKE_CXX_STANDARD 17)
 project(TripleR)
-add_subdirectory(src/external/volk)
 
-set(SHADERS_PATH ${PROJECT_SOURCE_DIR}/graphics/shaders)
-find_program(GLSLANGVALIDATOR_COMMAND
-        glslangValidator)
-if(NOT GLSLANGVALIDATOR_COMMAND)
-    message(FATAL_ERROR "glslangValidator required - source maintained at https://github.com/KhronosGroup/glslang")
-else(NOT GLSLANGVALIDATOR_COMMAND)
-    message("glslangValidator found")
-endif()
-add_custom_command(OUTPUT triangle.vert.spv
-        COMMAND glslangValidator -V ${SHADERS_PATH}/triangle.vert -o ${SHADERS_PATH}/triangle.vert.spv)
-add_subdirectory(src/external/meshoptimizer)
-add_executable(TripleR WIN32 src/tripleR.cpp)
-target_include_directories(TripleR PRIVATE src/external/volk)
-target_include_directories(TripleR PRIVATE src/external/meshoptimizer/src)
-target_include_directories(TripleR PRIVATE src/external/meshoptimizer/tools)
+set(PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
+add_subdirectory(${PROJECT_SOURCE_DIR}/external/volk)
+add_subdirectory(${PROJECT_SOURCE_DIR}/external/meshoptimizer)
+
+message("Project source directory: ${PROJECT_SOURCE_DIR}")
+# find_program(GLSLANG_VALIDATOR
+#         glslangValidator)
+# if(NOT GLSLANG_VALIDATOR)
+#     message(FATAL_ERROR "glslangValidator required - source maintained at https://github.com/KhronosGroup/glslang")
+# else(NOT GLSLANG_VALIDATOR)
+#     message("glslangValidator found")
+# endif()
+# add_custom_command(COMMENT "Compiling shader..."
+#         OUTPUT ${SHADERS_PATH}/triangle.vert.spv
+#         COMMAND ${GLSLANG_VALIDATOR} ${SHADERS_PATH}/triangle.vert -V -o ${SHADERS_PATH}triangle.vert.spv
+#         MAIN_DEPENDENCY ${SHADERS_PATH}/triangle.vert
+#         DEPENDS ${SHADERS_PATH}/triangle.vert ${GLSLANG_VALIDATOR})
+add_executable(TripleR WIN32 ${PROJECT_SOURCE_DIR}/tripleR.cpp)
+target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/volk)
+target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/meshoptimizer/src)
+target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/meshoptimizer/tools)
 target_link_libraries(TripleR PRIVATE volk_headers)
 target_link_libraries(TripleR PRIVATE meshoptimizer)
 
