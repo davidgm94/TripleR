@@ -1,5 +1,5 @@
 #define NV_RTX 0
-#define NV_MESH_SHADING 1
+#define NV_MESH_SHADING 0
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
 #if NDEBUG

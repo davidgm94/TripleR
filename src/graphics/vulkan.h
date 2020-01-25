@@ -33,7 +33,7 @@ typedef struct
 	VkSemaphore imageAcquireSemaphore;
 	VkSemaphore imageReleaseSemaphore;
 	VkExtent2D extent;
-	Mesh_with_meshlets currentMesh;
+	Mesh currentMesh;
 } vulkan_renderer;
 
 void vk_loadTriangle(vulkan_renderer* vk, os_window_handles* window, os_window_dimensions* windowDimension);
