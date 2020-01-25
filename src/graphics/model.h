@@ -1,3 +1,4 @@
+#if NEW_MESHOPTIMIZER
 #include <indexgenerator.cpp>
 #define FAST_OBJ_IMPLEMENTATION
 #include <fast_obj.h>
@@ -187,3 +188,143 @@ static inline Mesh_with_meshlets loadMesh(const char* path)
 	buildMeshlets(&mesh);
 	return mesh;
 }
+#else
+#include <meshoptimizer.h>
+#include <objparser.h>
+typedef struct
+{
+    float vx, vy, vz;
+    u8 nx, ny, nz, nw;
+    float tu, tv;
+} Vertex;
+
+typedef struct
+{
+    u32 vertices[64];
+    u8 indices[126]; // up to 42 triangles
+    u8 indexCount;
+    u8 vertexCount;
+} Meshlet;
+FAST_VECTOR(Meshlet);
+
+typedef struct
+{
+    vector<Vertex> vertices;
+    vector<u32> indices;
+    vector<Meshlet> meshlets;
+} Mesh_with_meshlets;
+
+static inline Mesh_with_meshlets loadObj(const char* path)
+{
+    ObjFile file;
+    objParseFile(file, path);
+
+    size_t indexCount = file.f_size / 3;
+    vector<Vertex> vertices(indexCount);
+
+    Mesh_with_meshlets mesh;
+
+    for (u64 i = 0; i < indexCount; i++)
+    {
+        Vertex& v = vertices[i];
+
+        int vi = file.f[i * 3 + 0];
+        int vti = file.f[i * 3 + 1];
+        int vni = file.f[i * 3 + 2];
+
+        float nx = vni < 0 ? 0.f : file.vn[vni * 3 + 0];
+        float ny = vni < 0 ? 0.f : file.vn[vni * 3 + 1];
+        float nz = vni < 0 ? 1.f : file.vn[vni * 3 + 2];
+
+        v.vx = file.v[vi * 3 + 0];
+        v.vy = file.v[vi * 3 + 1];
+        v.vz = file.v[vi * 3 + 2];
+        v.nx = uint8_t(nx * 127.f + 127.f); // TODO: fix rounding
+        v.ny = uint8_t(ny * 127.f + 127.f); // TODO: fix rounding
+        v.nz = uint8_t(nz * 127.f + 127.f); // TODO: fix rounding
+        v.tu = vti < 0 ? 0.f : file.vt[vti * 3 + 0];
+        v.tv = vti < 0 ? 0.f : file.vt[vti * 3 + 1];
+    }
+
+    if (0)
+    {
+        mesh.vertices = vertices;
+        mesh.indices.resize(indexCount);
+
+        for (size_t i = 0; i < indexCount; ++i)
+            mesh.indices[i] = uint32_t(i);
+    }
+    else
+    {
+        std::vector<uint32_t> remap(indexCount);
+        size_t vertex_count = meshopt_generateVertexRemap(remap.data(), 0, indexCount, vertices.data(), indexCount, sizeof(Vertex));
+
+        mesh.vertices.resize(vertex_count);
+        mesh.indices.resize(indexCount);
+
+        meshopt_remapVertexBuffer(mesh.vertices.data(), vertices.data(), indexCount, sizeof(Vertex), remap.data());
+        meshopt_remapIndexBuffer(mesh.indices.data(), 0, indexCount, remap.data());
+    }
+
+    return mesh;
+}
+
+// TODO: fill this function by extracting the stated above
+// void optimizeMesh(Mesh_with_meshlets mesh, Vertex* vertices, u64 vertexCount, u32* indices, u64 indexCount)
+// {
+// }
+
+void buildMeshlets(Mesh_with_meshlets & mesh) {
+    Meshlet meshlet = {};
+
+    std::vector<uint8_t> meshletVertices(mesh.vertices.size(), 0xff);
+
+    for (size_t i = 0; i < mesh.indices.size(); i += 3) {
+        unsigned int a = mesh.indices[i + 0];
+        unsigned int b = mesh.indices[i + 1];
+        unsigned int c = mesh.indices[i + 2];
+
+        uint8_t &av = meshletVertices[a];
+        uint8_t &bv = meshletVertices[b];
+        uint8_t &cv = meshletVertices[c];
+
+        if (meshlet.vertexCount + (av == 0xff) + (bv == 0xff) + (cv == 0xff) > 64 || meshlet.indexCount + 3 > 126) {
+            mesh.meshlets.push_back(meshlet);
+
+            for (size_t j = 0; j < meshlet.vertexCount; ++j)
+                meshletVertices[meshlet.vertices[j]] = 0xff;
+
+            meshlet = {};
+        }
+
+        if (av == 0xff) {
+            av = meshlet.vertexCount;
+            meshlet.vertices[meshlet.vertexCount++] = a;
+        }
+
+        if (bv == 0xff) {
+            bv = meshlet.vertexCount;
+            meshlet.vertices[meshlet.vertexCount++] = b;
+        }
+
+        if (cv == 0xff) {
+            cv = meshlet.vertexCount;
+            meshlet.vertices[meshlet.vertexCount++] = c;
+        }
+
+        meshlet.indices[meshlet.indexCount++] = av;
+        meshlet.indices[meshlet.indexCount++] = bv;
+        meshlet.indices[meshlet.indexCount++] = cv;
+    }
+
+    if (meshlet.indexCount)
+        mesh.meshlets.push_back(meshlet);
+}
+
+static inline Mesh_with_meshlets loadMesh(const char* path)
+{
+    Mesh_with_meshlets mesh = loadObj(path);
+    buildMeshlets(mesh);
+    return mesh;
+}
+#endif

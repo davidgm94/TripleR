@@ -162,21 +162,21 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 	vk->meshPipeline.vb = vk_createVertexBuffer(vk->allocator, vk->device, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &vk->swapchainProperties.memoryProperties);
 	VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.vb.memory, 0, vk->meshPipeline.vb.size, 0, &vk->meshPipeline.vb.data));
 	os_assert(vk->meshPipeline.vb.size >= vk->currentMesh.vertices.size * sizeof(Vertex));
-	os_memcpy(vk->meshPipeline.vb.data, vk->currentMesh.vertices.data, vk->currentMesh.vertices.size * sizeof(Vertex));
+	os_memcpy(vk->meshPipeline.vb.data, vk->currentMesh.vertices.data(), vk->currentMesh.vertices.size() * sizeof(Vertex));
 	vkUnmapMemory(vk->device, vk->meshPipeline.vb.memory);
 
 	vk->meshPipeline.ib = vk_createIndexBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
 	VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.ib.memory, 0, vk->meshPipeline.ib.size, 0, &vk->meshPipeline.ib.data));
 	os_assert(vk->meshPipeline.ib.size >= vk->currentMesh.indices.size * sizeof(u32));
-	os_memcpy(vk->meshPipeline.ib.data, vk->currentMesh.indices.data, vk->currentMesh.indices.size * sizeof(u32));
+	os_memcpy(vk->meshPipeline.ib.data, vk->currentMesh.indices.data(), vk->currentMesh.indices.size() * sizeof(u32));
 	vkUnmapMemory(vk->device, vk->meshPipeline.ib.memory);
 
 #if NV_MESH_SHADING
 	vk->meshPipeline.mb = vk_createStorageBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
 	VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.mb.memory, 0, vk->meshPipeline.mb.size, 0, &vk->meshPipeline.mb.data));
 	os_assert(vk->meshPipeline.mb.size >= vk->currentMesh.meshlets.size * sizeof(Meshlet));
-	os_memcpy(vk->meshPipeline.mb.data, vk->currentMesh.meshlets.data, vk->currentMesh.meshlets.size * sizeof(Meshlet));
-	vkUnmapMemory(vk->device, vk->meshPipeline.ib.memory);
+	os_memcpy(vk->meshPipeline.mb.data, vk->currentMesh.meshlets.data(), vk->currentMesh.meshlets.size() * sizeof(Meshlet));
+	vkUnmapMemory(vk->device, vk->meshPipeline.mb.memory);
 #endif
 }
 
@@ -260,7 +260,7 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
 
 	vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->graphicsPipelineLayout, 0, ARRAYSIZE(descriptors), descriptors);
 
-	vkCmdDrawMeshTasksNV(commandBuffer, vk->currentMesh.meshlets.size, 0);
+	vkCmdDrawMeshTasksNV(commandBuffer, vk->currentMesh.meshlets.size(), 0);
 #else
 	VkWriteDescriptorSet descriptors[1];
     descriptors[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -277,7 +277,7 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
 	vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->graphicsPipelineLayout, 0, ARRAYSIZE(descriptors), descriptors);
 
 	vkCmdBindIndexBuffer(commandBuffer, vk->meshPipeline.ib.buffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(commandBuffer, vk->currentMesh.indices.size, 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, vk->currentMesh.indices.size(), 1, 0, 0, 0);
 #endif
 
 	vkCmdEndRenderPass(commandBuffer);

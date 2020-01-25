@@ -4,7 +4,7 @@ project(TripleR)
 
 set(PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 add_subdirectory(${PROJECT_SOURCE_DIR}/external/volk)
-add_subdirectory(${PROJECT_SOURCE_DIR}/external/meshoptimizer)
+add_subdirectory(${PROJECT_SOURCE_DIR}/external/meshoptimizer_old)
 
 message("Project source directory: ${PROJECT_SOURCE_DIR}")
 # find_program(GLSLANG_VALIDATOR
@@ -19,10 +19,11 @@ message("Project source directory: ${PROJECT_SOURCE_DIR}")
 #         COMMAND ${GLSLANG_VALIDATOR} ${SHADERS_PATH}/triangle.vert -V -o ${SHADERS_PATH}triangle.vert.spv
 #         MAIN_DEPENDENCY ${SHADERS_PATH}/triangle.vert
 #         DEPENDS ${SHADERS_PATH}/triangle.vert ${GLSLANG_VALIDATOR})
-add_executable(TripleR WIN32 ${PROJECT_SOURCE_DIR}/tripleR.cpp)
+add_executable(TripleR WIN32 ${PROJECT_SOURCE_DIR}/tripleR.cpp ${PROJECT_SOURCE_DIR}/external/meshoptimizer_old/demo/objparser.cpp)
 target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/volk)
-target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/meshoptimizer/src)
-target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/meshoptimizer/tools)
+target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/meshoptimizer_old/demo)
+target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/meshoptimizer_old/src)
+target_include_directories(TripleR PRIVATE ${PROJECT_SOURCE_DIR}/external/meshoptimizer_old/tools)
 target_link_libraries(TripleR PRIVATE volk_headers)
 target_link_libraries(TripleR PRIVATE meshoptimizer)
 
