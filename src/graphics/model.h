@@ -1,11 +1,12 @@
 #include <indexgenerator.cpp>
 #define FAST_OBJ_IMPLEMENTATION
 #include <fast_obj.h>
-typedef struct
+
+typedef struct Vertex
 {
-	float vx, vy, vz;
+	f16 vx, vy, vz;
 	u8 nx, ny, nz, nw;
-	float tu, tv;
+	f16 tu, tv;
 } Vertex;
 
 typedef struct
@@ -52,16 +53,16 @@ static inline Mesh loadObj(const char* path)
 			}
 
 			Vertex v;
-			v.vx = obj->positions[gi.p * 3 + 0];
-			v.vy = obj->positions[gi.p * 3 + 1];
-			v.vz = obj->positions[gi.p * 3 + 2];
+			v.vx = meshopt_quantizeHalf(obj->positions[gi.p * 3 + 0]);
+			v.vy = meshopt_quantizeHalf(obj->positions[gi.p * 3 + 1]);
+			v.vz = meshopt_quantizeHalf(obj->positions[gi.p * 3 + 2]);
 
 			v.nx = (u8)(obj->normals[gi.n * 3 + 0] * 127.f + 127.5f);
 			v.ny = (u8)(obj->normals[gi.n * 3 + 1] * 127.f + 127.5f);
 			v.nz = (u8)(obj->normals[gi.n * 3 + 2] * 127.f + 127.5f);
 			
-			v.tu = obj->texcoords[gi.t * 2 + 0];
-			v.tv = obj->texcoords[gi.t * 2 + 1]; // originally: obj->texcoords[gi.t * 2 + 1]
+			v.tu = meshopt_quantizeHalf(obj->texcoords[gi.t * 2 + 0]);
+			v.tv = meshopt_quantizeHalf(obj->texcoords[gi.t * 2 + 1]); // originally: obj->texcoords[gi.t * 2 + 1]
 
 			vertices[vertexOffset] = v;
 			vertexOffset++;
@@ -82,6 +83,9 @@ static inline Mesh loadObj(const char* path)
 
     meshopt_remapVertexBuffer(mesh.vertices.data(), vertices.data(), indexCount, sizeof(Vertex), remap.data());
     meshopt_remapIndexBuffer(mesh.indices.data(), null, indexCount, remap.data());
+
+    meshopt_optimizeVertexCache(mesh.indices.data(), mesh.indices.data(), indexCount, vertexCount);
+    meshopt_optimizeVertexFetch(mesh.vertices.data(), mesh.indices.data(), indexCount, mesh.vertices.data(), vertexCount, sizeof(Vertex));
 
 	return mesh;
 }

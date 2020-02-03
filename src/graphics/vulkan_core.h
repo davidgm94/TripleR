@@ -1,5 +1,5 @@
 #define NV_RTX 0
-#define NV_MESH_SHADING 1
+#define NV_MESH_SHADING 0
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
 #if NDEBUG
@@ -924,6 +924,20 @@ static inline void vk_bufferMemoryBarrier(
 	vkCmdPipelineBarrier(commandBuffer, generatingStages, consumingStages, 0, 0, nullptr, bufferCount, memoryBarrierArray.data(), 0, nullptr);
 }
 
+static inline VkBufferMemoryBarrier vk_createBufferBarrier(VkBuffer buffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask)
+{
+    VkBufferMemoryBarrier barrier = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+    barrier.srcAccessMask = srcAccessMask;
+    barrier.dstAccessMask = dstAccessMask;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.buffer = buffer;
+    barrier.offset = 0;
+    barrier.size = VK_WHOLE_SIZE;
+
+    return barrier;
+}
+
 static inline VkBufferView vk_createBufferView(VkAllocationCallbacks* allocator, VkDevice device, VkBuffer buffer, VkFormat bufferFormat, VkDeviceSize memoryOffset, VkDeviceSize memoryRange)
 {
 	VkBufferViewCreateInfo createInfo;
@@ -1411,14 +1425,7 @@ static inline void copyToTransferBuffer(VkAllocationCallbacks* allocator, VkDevi
     VkBufferCopy region = {0, 0, dataSize};
     vkCmdCopyBuffer(commandBuffer, transferBuffer->buffer, buffer->buffer, 1, &region);
 
-    VkBufferMemoryBarrier copyBarrier = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
-    copyBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    copyBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    copyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    copyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    copyBarrier.buffer = buffer->buffer;
-    copyBarrier.offset = 0;
-    copyBarrier.size = dataSize;
+    VkBufferMemoryBarrier copyBarrier = vk_createBufferBarrier(buffer->buffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
 
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1, &copyBarrier, 0, 0);

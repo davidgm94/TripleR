@@ -183,13 +183,10 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 	        &vk->meshPipeline.ib, &vk->meshPipeline.transferBuffer, vk->currentMesh.indices.data(), vk->currentMesh.indices.size() * sizeof(u32));
 
 
+#if NV_MESH_SHADING
     copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
                          vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
                          &vk->meshPipeline.mb, &vk->meshPipeline.transferBuffer, vk->currentMesh.meshlets.data(), vk->currentMesh.meshlets.size() * sizeof(Meshlet));
-    vkUnmapMemory(vk->device, vk->meshPipeline.vb.memory);
-    vkUnmapMemory(vk->device, vk->meshPipeline.ib.memory);
-#if NV_MESH_SHADING
-    vkUnmapMemory(vk->device, vk->meshPipeline.mb.memory);
 #endif
 }
 
