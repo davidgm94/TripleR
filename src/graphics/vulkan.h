@@ -159,24 +159,37 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 
 	size_t size = 128 * 1024 * 1024;
 
+
 	vk->meshPipeline.vb = vk_createVertexBuffer(vk->allocator, vk->device, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &vk->swapchainProperties.memoryProperties);
-	VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.vb.memory, 0, vk->meshPipeline.vb.size, 0, &vk->meshPipeline.vb.data));
 	os_assert(vk->meshPipeline.vb.size >= vk->currentMesh.vertices.size * sizeof(Vertex));
-	os_memcpy(vk->meshPipeline.vb.data, vk->currentMesh.vertices.data(), vk->currentMesh.vertices.size() * sizeof(Vertex));
-	vkUnmapMemory(vk->device, vk->meshPipeline.vb.memory);
 
 	vk->meshPipeline.ib = vk_createIndexBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
-	VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.ib.memory, 0, vk->meshPipeline.ib.size, 0, &vk->meshPipeline.ib.data));
 	os_assert(vk->meshPipeline.ib.size >= vk->currentMesh.indices.size * sizeof(u32));
-	os_memcpy(vk->meshPipeline.ib.data, vk->currentMesh.indices.data(), vk->currentMesh.indices.size() * sizeof(u32));
-	vkUnmapMemory(vk->device, vk->meshPipeline.ib.memory);
 
 #if NV_MESH_SHADING
-	vk->meshPipeline.mb = vk_createStorageBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
-	VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.mb.memory, 0, vk->meshPipeline.mb.size, 0, &vk->meshPipeline.mb.data));
+	vk->meshPipeline.mb = vk_createMeshBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
 	os_assert(vk->meshPipeline.mb.size >= vk->currentMesh.meshlets.size * sizeof(Meshlet));
-	os_memcpy(vk->meshPipeline.mb.data, vk->currentMesh.meshlets.data(), vk->currentMesh.meshlets.size() * sizeof(Meshlet));
-	vkUnmapMemory(vk->device, vk->meshPipeline.mb.memory);
+#endif
+
+    vk->meshPipeline.transferBuffer = vk_createTransferBuffer(vk->allocator, vk->device, size, &vk->swapchainProperties.memoryProperties);
+    VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.transferBuffer.memory, 0, size, 0, &vk->meshPipeline.transferBuffer.data));
+
+    copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+                         vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+                         &vk->meshPipeline.vb, &vk->meshPipeline.transferBuffer, vk->currentMesh.vertices.data(), vk->currentMesh.vertices.size() * sizeof(Vertex));
+
+	copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+	        vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+	        &vk->meshPipeline.ib, &vk->meshPipeline.transferBuffer, vk->currentMesh.indices.data(), vk->currentMesh.indices.size() * sizeof(u32));
+
+
+    copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+                         vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+                         &vk->meshPipeline.mb, &vk->meshPipeline.transferBuffer, vk->currentMesh.meshlets.data(), vk->currentMesh.meshlets.size() * sizeof(Meshlet));
+    vkUnmapMemory(vk->device, vk->meshPipeline.vb.memory);
+    vkUnmapMemory(vk->device, vk->meshPipeline.ib.memory);
+#if NV_MESH_SHADING
+    vkUnmapMemory(vk->device, vk->meshPipeline.mb.memory);
 #endif
 }
 
@@ -313,7 +326,10 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
 
 	frameAvgCPU = frameAvgCPU * 0.95 + frameCPU * 0.05;
     frameAvgGPU = frameAvgGPU * 0.95 + frameGPU * 0.05;
-	os_sprintf(buffer, "[Red Engine] Frametime. CPU: %.02f ms. GPU: %.02f ms.", frameAvgCPU, frameAvgGPU);
+    static const char * const messageBuffer = "[Red Engine] Frametime. CPU: %.02f ms. GPU: %.02f ms. Triangle count: %u. Meshlet count: %u";
+    static const int triangleCount = int(vk->currentMesh.indices.size() / 3.0);
+    static const int meshletCount = int(vk->currentMesh.indices.size());
+	os_sprintf(buffer, messageBuffer, frameAvgCPU, frameAvgGPU, triangleCount, meshletCount);
 	SetWindowTextA(win32.handles.window, buffer);
 }
 

@@ -1,5 +1,5 @@
 #define NV_RTX 0
-#define NV_MESH_SHADING 0
+#define NV_MESH_SHADING 1
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
 #if NDEBUG
@@ -1395,13 +1395,50 @@ typedef struct
 	size_t size;
 } VulkanBufferWithData;
 
+static inline void copyToTransferBuffer(VkAllocationCallbacks* allocator, VkDevice device, VkCommandPool commandPool, VkCommandBuffer commandBuffer, VkQueue queue, VulkanBufferWithData* buffer, VulkanBufferWithData* transferBuffer, const void* data, size_t dataSize)
+{
+    assert(transferBuffer->data);
+    assert(transferBuffer->size >= dataSize);
+    os_memcpy(transferBuffer->data, data, dataSize);
+
+    VKCHECK(vkResetCommandPool(device, commandPool, 0));
+
+    VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VKCHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    VkBufferCopy region = {0, 0, dataSize};
+    vkCmdCopyBuffer(commandBuffer, transferBuffer->buffer, buffer->buffer, 1, &region);
+
+    VkBufferMemoryBarrier copyBarrier = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+    copyBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    copyBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    copyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    copyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    copyBarrier.buffer = buffer->buffer;
+    copyBarrier.offset = 0;
+    copyBarrier.size = dataSize;
+
+    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1, &copyBarrier, 0, 0);
+
+    VKCHECK(vkEndCommandBuffer(commandBuffer));
+
+    VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    VKCHECK(vkQueueSubmit(queue, 1, &submitInfo, nullptr));
+    VKCHECK(vkDeviceWaitIdle(device));
+}
+
 static inline VulkanBufferWithData vk_createVertexBuffer(VkAllocationCallbacks* allocator, VkDevice device,
 	VkDeviceSize size, VkBufferUsageFlags usage,
 	VkPhysicalDeviceMemoryProperties* physicalDeviceMemoryProperties)
 {
-	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, physicalDeviceMemoryProperties);
-
+	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 	return { buffer, memory, null, size };
 }
 
@@ -1409,8 +1446,8 @@ static inline VulkanBufferWithData vk_createIndexBuffer(VkAllocationCallbacks* a
 	VkDeviceSize size, VkBufferUsageFlags usage,
 	VkPhysicalDeviceMemoryProperties* physicalDeviceMemoryProperties)
 {
-	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, physicalDeviceMemoryProperties);
+	VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
 
 	return { buffer, memory, null, size };
 }
@@ -1423,6 +1460,23 @@ static inline VulkanBufferWithData vk_createStorageBuffer(VkAllocationCallbacks*
 	VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, physicalDeviceMemoryProperties);
 
 	return { buffer, memory, null, size };
+}
+static inline VulkanBufferWithData vk_createMeshBuffer(VkAllocationCallbacks* allocator, VkDevice device,
+                                                          VkDeviceSize size, VkBufferUsageFlags usage,
+                                                          VkPhysicalDeviceMemoryProperties* physicalDeviceMemoryProperties)
+{
+    VkBuffer buffer = vk_createBuffer(allocator, device, size, usage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, physicalDeviceMemoryProperties);
+
+    return { buffer, memory, null, size };
+}
+
+static inline VulkanBufferWithData vk_createTransferBuffer(VkAllocationCallbacks* allocator, VkDevice device, VkDeviceSize size, VkPhysicalDeviceMemoryProperties* memoryProperties)
+{
+    VkBuffer buffer = vk_createBuffer(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    VkDeviceMemory memory = vk_allocateAndBindToBuffer(allocator, device, buffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memoryProperties);
+
+    return { buffer, memory, null, size };
 }
 
 static inline VulkanBufferNoView vk_createUniformBuffer(VkAllocationCallbacks* allocator, VkDevice device,
@@ -2086,8 +2140,8 @@ typedef struct
 	VulkanBufferWithData vb;
 	VulkanBufferWithData ib;
 	VulkanBufferWithData mb;
+	VulkanBufferWithData transferBuffer;
 } VulkanMeshPipeline;
-
 
 // TODO: modify
 static inline VkRenderPass vk_setupRenderPass(VkAllocationCallbacks* allocator, VkDevice device,

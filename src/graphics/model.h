@@ -74,28 +74,14 @@ static inline Mesh loadObj(const char* path)
 	fast_obj_destroy(obj);
 
 	Mesh mesh;
-	// TODO: This procedure should be extracted into another function
-	if (false)
-	{
-		mesh.vertices = vertices;
-		mesh.indices.resize(vertices.size());
+    vector<u32> remap(indexCount);
+    u64 vertexCount = meshopt_generateVertexRemap(remap.data(), null, indexCount, vertices.data(), indexCount, sizeof(Vertex));
 
-		for (u32 i = 0; i < indexCount; i++)
-		{
-			mesh.indices[i] = (u32)(i);
-		}
-	}
-	else
-	{
-		vector<u32> remap(indexCount);
-		u64 vertexCount = meshopt_generateVertexRemap(remap.data(), null, indexCount, vertices.data(), indexCount, sizeof(Vertex));
+    mesh.vertices.resize(vertexCount);
+    mesh.indices.resize(indexCount);
 
-		mesh.vertices.resize(vertexCount);
-        mesh.indices.resize(indexCount);
-
-		meshopt_remapVertexBuffer(mesh.vertices.data(), vertices.data(), indexCount, sizeof(Vertex), remap.data());
-		meshopt_remapIndexBuffer(mesh.indices.data(), null, indexCount, remap.data());
-	}
+    meshopt_remapVertexBuffer(mesh.vertices.data(), vertices.data(), indexCount, sizeof(Vertex), remap.data());
+    meshopt_remapIndexBuffer(mesh.indices.data(), null, indexCount, remap.data());
 
 	return mesh;
 }
