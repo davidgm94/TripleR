@@ -156,7 +156,7 @@ await MeshoptDecoder.ready;
 
 // decode from *Data (Uint8Array) into *Buffer (Uint8Array)
 MeshoptDecoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexData);
-MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
+MeshoptDecoder.decodeIndexBuffer(indexBuffer, triangleCount, indexSize, indexData);
 ```
 
 [Usage example](https://meshoptimizer.org/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack`.

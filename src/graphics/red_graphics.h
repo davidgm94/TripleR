@@ -1,4 +1,4 @@
-#include "model.h"
+#include "red_model.h"
 #include "vulkan.h"
 
 typedef enum

@@ -4,7 +4,7 @@
 
 typedef struct Vertex
 {
-	f16 vx, vy, vz;
+	f16 vx, vy, vz, vw;
 	u8 nx, ny, nz, nw;
 	f16 tu, tv;
 } Vertex;
@@ -12,8 +12,8 @@ typedef struct Vertex
 typedef struct
 {
 	u32 vertices[64];
-	u8 indices[126]; // up to 42 triangles
-	u8 indexCount;
+	u8 indices[126 * 3]; // up to 42 triangles
+	u8 triangleCount;
 	u8 vertexCount;
 } Meshlet;
 
@@ -90,17 +90,13 @@ static inline Mesh loadObj(const char* path)
 	return mesh;
 }
 
-// TODO: fill this function by extracting the stated above
-// void optimizeMesh(Mesh mesh, Vertex* vertices, u64 vertexCount, u32* indices, u64 indexCount)
-// {
-// }
-
 void buildMeshlets(Mesh* mesh)
 {
 	Meshlet meshlet = {};
 
-	vector<u8> meshletVertices(mesh->vertices.size(), 0xff);
-	const u64 meshIndexCount = mesh->indices.size();
+    const u64 meshIndexCount = mesh->indices.size();
+    const u64 meshVertexCount = mesh->vertices.size();
+	vector<u8> meshletVertices(meshVertexCount, 0xff);
 
 	for (u64 i = 0; i < meshIndexCount; i+= 3)
 	{
@@ -112,15 +108,13 @@ void buildMeshlets(Mesh* mesh)
 		u8* bv = &meshletVertices[b];
 		u8* cv = &meshletVertices[c];
 
-		if (meshlet.vertexCount + (*av == 0xff) + (*bv == 0xff) + (*cv == 0xff) > 64 || meshlet.indexCount + 3 > 126)
+		if (meshlet.vertexCount + (*av == 0xff) + (*bv == 0xff) + (*cv == 0xff) > 64 || meshlet.triangleCount >= 126)
 		{
 		    mesh->meshlets.push_back(meshlet);
-
 			for (u64 j = 0; j < meshlet.vertexCount; ++j)
 			{
 				meshletVertices[meshlet.vertices[j]] = 0xff;
 			}
-			
 			os_memset(&meshlet, 0, sizeof(Meshlet));
 		}
 
@@ -140,12 +134,13 @@ void buildMeshlets(Mesh* mesh)
 			meshlet.vertices[meshlet.vertexCount++] = c;
 		}
 
-		meshlet.indices[meshlet.indexCount++] = *av;
-		meshlet.indices[meshlet.indexCount++] = *bv;
-		meshlet.indices[meshlet.indexCount++] = *cv;
+		meshlet.indices[meshlet.triangleCount * 3 + 0] = *av;
+        meshlet.indices[meshlet.triangleCount * 3 + 1] = *bv;
+        meshlet.indices[meshlet.triangleCount * 3 + 2] = *cv;
+        meshlet.triangleCount++;
 	}
 
-	if (meshlet.indexCount > 0)
+	if (meshlet.triangleCount > 0)
 	    mesh->meshlets.push_back(meshlet);
 }
 
