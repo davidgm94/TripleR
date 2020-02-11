@@ -337,10 +337,10 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
 
 	frameAvgCPU = frameAvgCPU * 0.95 + frameCPU * 0.05;
     frameAvgGPU = frameAvgGPU * 0.95 + frameGPU * 0.05;
-    static const char * const messageBuffer = "[Red Engine] Frametime. CPU: %.02f ms. GPU: %.02f ms. Triangle count: %u. Meshlet count: %u";
+    static const char * const messageBuffer = "[Red Engine] Frametime. CPU: %.02f ms. GPU: %.02f ms. Triangle count: %u. Meshlet count: %u. Mesh shading: %s";
     static const int triangleCount = int(vk->currentMesh.indices.size() / 3.0);
     static const int meshletCount = int(vk->currentMesh.indices.size());
-	os_sprintf(buffer, messageBuffer, frameAvgCPU, frameAvgGPU, triangleCount, meshletCount);
+	os_sprintf(buffer, messageBuffer, frameAvgCPU, frameAvgGPU, triangleCount, meshletCount, vk->meshShadingEnabled ? "ON" : "OFF");
 	SetWindowTextA(win32.handles.window, buffer);
 }
 
