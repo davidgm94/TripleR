@@ -27,6 +27,7 @@ typedef struct
 } win32_timer;
 typedef struct
 {
+    os_keyboard_state keyboardState;
 	win32_native_handles handles;
 	win32_application_state applicationState;
 	win32_timer timer;
@@ -46,7 +47,7 @@ win32_window_application* win32_startup(const char* windowTitle, os_window_dimen
 
 LRESULT CALLBACK win32_messageCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	application_state* app_info = ((application_state*)GetWindowLongPtr(window, GWLP_USERDATA));
+	win32_window_application* windowApplication = ((win32_window_application*)GetWindowLongPtr(window, GWLP_USERDATA));
 	switch (message)
 	{
 		case (WM_PAINT):
@@ -55,9 +56,9 @@ LRESULT CALLBACK win32_messageCallback(HWND window, UINT message, WPARAM wParam,
 		} break;
 		case (WM_CLOSE):
 		{
-			if (app_info)
+			if (windowApplication)
 			{
-				app_info->s[APPLICATION_STATE_FINISHED] = true;
+                windowApplication->applicationState.s[APPLICATION_STATE_FINISHED] = true;
 				DestroyWindow(window);
 				PostQuitMessage(0);
 			}
@@ -67,6 +68,18 @@ LRESULT CALLBACK win32_messageCallback(HWND window, UINT message, WPARAM wParam,
 			LPCREATESTRUCT p_create_struct = (LPCREATESTRUCT)(lParam);
 			(void)SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)(p_create_struct->lpCreateParams));
 		} break;
+	    case (WM_KEYDOWN):
+        {
+            os_key_event keyEvent = KEY_DOWN;
+            os_key keyToUpdate = (os_key)wParam;
+            os_saveKeyEvent(&windowApplication->keyboardState, keyToUpdate, keyEvent);
+        } break;
+	    case (WM_KEYUP):
+        {
+            os_key_event keyEvent = KEY_UP;
+            os_key keyToUpdate = (os_key)wParam;
+            os_saveKeyEvent(&windowApplication->keyboardState, keyToUpdate, keyEvent);
+        }
 		default:
 		{
 
@@ -113,13 +126,14 @@ static inline HWND win32_createWindow(HINSTANCE instance, WNDPROC window_proc, i
 
 win32_window_application* win32_startup(const char* windowTitle, os_window_dimensions* window, win32_window_application* win32_app)
 {
+    *win32_app = {};
 	win32_setupConsole(windowTitle);
 	win32_app->applicationState.s[APPLICATION_STATE_FINISHED] = false;
 	win32_app->applicationState.s[APPLICATION_STATE_RESIZING] = false;
 	win32_app->applicationState.s[APPLICATION_STATE_PAUSED] = false;
 	(void)QueryPerformanceFrequency((LARGE_INTEGER*)&win32_app->timer.performanceFrequency);
 	(void)QueryPerformanceCounter((LARGE_INTEGER*)&win32_app->timer.firstPerformanceCounter);
-	win32_app->handles.window = win32_createWindow(win32_app->handles.winmainArguments.instance, win32_messageCallback, (u32)window->width, (u32)window->height, windowTitle, &win32_app->applicationState);
+	win32_app->handles.window = win32_createWindow(win32_app->handles.winmainArguments.instance, win32_messageCallback, (u32)window->width, (u32)window->height, windowTitle, win32_app);
 	(void)ShowWindow(win32_app->handles.window, SW_SHOW);
 	return win32_app;
 }
@@ -220,6 +234,17 @@ static void os_getAssetPath(const char* assetName, char* buffer)
 {
     os_strcpy(buffer, assetDirectory);
     os_appendFileOrDirectory(buffer, assetName);
+}
+
+static void os_saveKeyEvent(os_keyboard_state* keyboardState, os_key keyToUpdate, os_key_event keyEvent)
+{
+    keyboardState->keyState[keyToUpdate] |= keyEvent << 0;
+}
+
+static bool os_processKeyboardState(os_keyboard_state* keyboardState)
+{
+    const bool isPressedM = (keyboardState->keyState[KEYBOARD_M] << 0) == 1UL;
+    return isPressedM;
 }
 
 #endif

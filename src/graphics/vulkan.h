@@ -199,6 +199,8 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 
 void vk_renderModelNVMesh(vulkan_renderer* vk)
 {
+    if (os_processKeyboardState(&win32.keyboardState))
+        vk->meshShadingEnabled = !vk->meshShadingEnabled;
     static double frameAvgCPU = 0;
     static double frameAvgGPU = 0;
 

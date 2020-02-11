@@ -320,9 +320,9 @@ typedef struct
 typedef struct
 {
 	char keyState[UINT8_MAX + 1];
-} engine_keyboard_state;
+} os_keyboard_state;
 
-enum platform_keys
+enum os_key
 {
 	MOUSE_LEFT_BUTTON = 0x01,
 	MOUSE_RIGHT_BUTTON = 0x02,
@@ -469,6 +469,17 @@ enum platform_keys
 	KEYBOARD_LAUNCH_APP2 = 0xB7,
 	// (...)
 };
+
+enum os_key_event
+{
+    KEY_UP = 0x00,
+    KEY_DOWN = 0x01,
+    KEY_WAS_DOWN = 0x02,
+    KEY_WAS_UP = 0x03,
+};
+
+void os_saveKeyEvent(os_keyboard_state* keyboardState, os_key keyToUpdate, os_key_event keyEvent);
+bool os_processKeyboardState(os_keyboard_state* keyboardState);
 
 void os_debugBreak(void);
 void os_debugInfo(const char* message, RED_LOG_SEVERITY severity);
