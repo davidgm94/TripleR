@@ -22,18 +22,18 @@ typedef struct
 	VkImageMemoryBarrier beginRenderBarriers[IMAGE_COUNT];
 	VkImageMemoryBarrier endRenderBarriers[IMAGE_COUNT];
 	VkQueryPool queryPool;
-	VulkanTraditionalPipeline traditionalPipeline;
-	VulkanMeshPipeline meshPipeline;
+	VulkanShaderPipeline shaderPipeline;
 	VkRenderPass renderPass;
-	VkDescriptorSetLayout descriptorSetLayout;
-	VkPipelineLayout graphicsPipelineLayout;
-	VkPipeline graphicsPipeline;
+	VulkanPipeline traditionalPipeline;
+	VulkanPipeline meshShadingPipeline;
 	VkCommandPool commandPools[QUEUE_FAMILY_INDEX_COUNT];
 	VkCommandBuffer commandBuffers[IMAGE_COUNT];
 	VkSemaphore imageAcquireSemaphore;
 	VkSemaphore imageReleaseSemaphore;
 	VkExtent2D extent;
 	Mesh currentMesh;
+    bool meshShadingSupported;
+	bool meshShadingEnabled;
 } vulkan_renderer;
 
 void vk_loadTriangle(vulkan_renderer* vk, os_window_handles* window, os_window_dimensions* windowDimension);
@@ -71,6 +71,23 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
     vk->debugCallback = vk_createDebugCallback(vk->allocator, vk->instance, debugCallbackFlags, vk_debugCallback);
 #endif
 	vk->physicalDevice = vk_pickPhysicalDevice(vk->instance);
+	u32 extensionCount = 0;
+	VKCHECK(vkEnumerateDeviceExtensionProperties(vk->physicalDevice, 0, &extensionCount, 0));
+	vector<VkExtensionProperties> extensions(extensionCount);
+	VKCHECK(vkEnumerateDeviceExtensionProperties(vk->physicalDevice, 0, &extensionCount, extensions.data()));
+
+    vk->meshShadingSupported = false;
+	vk->meshShadingEnabled = false;
+	for (VkExtensionProperties extension : extensions)
+    {
+	    if (os_strcmp(extension.extensionName, VK_NV_MESH_SHADER_EXTENSION_NAME) == 0)
+        {
+	        vk->meshShadingSupported = true;
+	        break;
+        }
+    }
+	vk->meshShadingEnabled = vk->meshShadingSupported;
+
 	vk->surface = vk_createSurface(vk->allocator, vk->instance, window);
     vk->extent = { windowDimension->width, windowDimension->height };
 
@@ -87,7 +104,7 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
     vk_setupQueueCreation(queueCreateInfoArray, &vk->swapchainProperties.queueFamily, queuesToCreate, priorities);
     vk_fillSwapchainRequirements(&vk->swapchainRequirements, &vk->swapchainProperties, &vk->extent);
 
-	vk->device = vk_createDevice(vk->allocator, vk->physicalDevice, vk->instance, queueCreateInfoArray, ARRAYCOUNT(queueCreateInfoArray));
+	vk->device = vk_createDevice(vk->allocator, vk->physicalDevice, vk->instance, queueCreateInfoArray, ARRAYCOUNT(queueCreateInfoArray), vk->meshShadingSupported);
 	vk->renderPass = vk_setupRenderPass(vk->allocator, vk->device, vk->swapchainRequirements.surfaceFormat.format);
 	vk_getDeviceQueues(vk->device, vk->swapchainProperties.queueFamily.indices, vk->queues);
     vk->swapchain = vk_createSwapchain(vk->allocator, vk->device, vk->surface, &vk->swapchainRequirements, nullptr);
@@ -97,55 +114,44 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 	vk_createImageMemoryBarriers(vk->beginRenderBarriers, vk->swapchainImages, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vk_createImageMemoryBarriers(vk->endRenderBarriers, vk->swapchainImages, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	vk->queryPool = vk_createTimestampQueryPool(vk->allocator, vk->device, 128);
+
     char vertexShaderPath[MAX_FILENAME_LENGTH];
     os_getShaderPath("model.vert.spv", vertexShaderPath);
     char fragmentShaderPath[MAX_FILENAME_LENGTH];
     os_getShaderPath("model.frag.spv", fragmentShaderPath);
     raw_str vsFile = os_readFile(vertexShaderPath);
 	raw_str fsFile = os_readFile(fragmentShaderPath);
-	vk->meshPipeline.vs = vk_createShaderModule(vk->allocator, vk->device, vsFile.data, vsFile.size);
-	vk->meshPipeline.fs = vk_createShaderModule(vk->allocator, vk->device, fsFile.data, fsFile.size);
-#if NV_MESH_SHADING
-    char meshShaderPath[MAX_FILENAME_LENGTH];
-    os_getShaderPath("model.mesh.spv", meshShaderPath);
-	raw_str msFile = os_readFile(meshShaderPath);
-	vk->meshPipeline.ms = vk_createShaderModule(vk->allocator, vk->device, msFile.data, msFile.size);
-	os_free(msFile.data);
-#endif
-	os_free(vsFile.data);
-	os_free(fsFile.data);
+	vk->shaderPipeline.vs = vk_createShaderModule(vk->allocator, vk->device, vsFile.data, vsFile.size);
+	vk->shaderPipeline.fs = vk_createShaderModule(vk->allocator, vk->device, fsFile.data, fsFile.size);
+    os_free(vsFile.data);
+    os_free(fsFile.data);
+
+	if (vk->meshShadingSupported)
+    {
+        char meshShaderPath[MAX_FILENAME_LENGTH];
+        os_getShaderPath("model.mesh.spv", meshShaderPath);
+        raw_str msFile = os_readFile(meshShaderPath);
+        vk->shaderPipeline.ms = vk_createShaderModule(vk->allocator, vk->device, msFile.data, msFile.size);
+        os_free(msFile.data);
+    }
 
 	VkPipelineCache pipelineCache = null;
 
-#if NV_MESH_SHADING
-	VkDescriptorSetLayoutBinding setBindings[2];
-	setBindings[0].binding = 0;
-	setBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	setBindings[0].descriptorCount = 1;
-	setBindings[0].stageFlags = VK_SHADER_STAGE_MESH_BIT_NV;
-	setBindings[0].pImmutableSamplers = null;
-
-	setBindings[1].binding = 1;
-	setBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	setBindings[1].descriptorCount = 1;
-	setBindings[1].stageFlags = VK_SHADER_STAGE_MESH_BIT_NV;
-	setBindings[1].pImmutableSamplers = null;
-#else
-	VkDescriptorSetLayoutBinding setBindings[1];
-	setBindings[0].binding = 0;
-	setBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	setBindings[0].descriptorCount = 1;
-	setBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	setBindings[0].pImmutableSamplers = null;
-#endif
-
-	vk->descriptorSetLayout = vk_createDescriptorSetLayout(vk->allocator, vk->device, setBindings, ARRAYCOUNT(setBindings), VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-	vk->graphicsPipelineLayout = vk_createPipelineLayout(vk->allocator, vk->device, &vk->descriptorSetLayout, 1, null, 0);
-#if NV_MESH_SHADING
-	vk->graphicsPipeline = vk_createMeshGraphicsPipeline(vk->allocator, vk->device, pipelineCache, vk->renderPass, vk->meshPipeline.ms, vk->meshPipeline.fs, vk->graphicsPipelineLayout);
-#else
-	vk->graphicsPipeline = vk_createMeshGraphicsPipeline(vk->allocator, vk->device, pipelineCache, vk->renderPass, vk->meshPipeline.vs, vk->meshPipeline.fs, vk->graphicsPipelineLayout);
-#endif
+	vector<VkDescriptorSetLayoutBinding> traditionalSetBindings = vk_createDescriptorSetLayoutBindings(false);
+    vk->traditionalPipeline.setLayout = vk_createDescriptorSetLayout(vk->allocator, vk->device, traditionalSetBindings.data(), traditionalSetBindings.size(), VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
+    vk->traditionalPipeline.layout = vk_createPipelineLayout(vk->allocator, vk->device, &vk->traditionalPipeline.setLayout, 1, null, 0);
+    vk->traditionalPipeline.pipeline = vk_createGraphicsPipeline(vk->allocator, vk->device, pipelineCache,
+                                                                 vk->renderPass, vk->shaderPipeline.vs, vk->shaderPipeline.fs,
+                                                                 vk->traditionalPipeline.layout, false);
+    if (vk->meshShadingSupported)
+    {
+        vector<VkDescriptorSetLayoutBinding> meshShadingSetBindings = vk_createDescriptorSetLayoutBindings(true);
+        vk->meshShadingPipeline.setLayout = vk_createDescriptorSetLayout(vk->allocator, vk->device, meshShadingSetBindings.data(), meshShadingSetBindings.size(), VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
+        vk->meshShadingPipeline.layout = vk_createPipelineLayout(vk->allocator, vk->device, &vk->meshShadingPipeline.setLayout, 1, null, 0);
+        vk->meshShadingPipeline.pipeline = vk_createGraphicsPipeline(vk->allocator, vk->device, pipelineCache,
+                                                                     vk->renderPass, vk->shaderPipeline.ms, vk->shaderPipeline.fs,
+                                                                     vk->meshShadingPipeline.layout, true);
+    }
 
 	// COMMANDS AND QUEUES
 	vk->imageAcquireSemaphore = vk_createSemaphore(vk->allocator, vk->device);
@@ -155,39 +161,40 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
 
 	char meshPath[MAX_FILENAME_LENGTH];
 	os_getAssetPath("kitten.obj", meshPath);
-	vk->currentMesh = loadMesh(meshPath);
+	vk->currentMesh = loadMesh(meshPath, vk->meshShadingSupported);
 
-	size_t size = 128 * 1024 * 1024;
+	const u64 size = 128 * 1024 * 1024;
 
+	vk->shaderPipeline.vb = vk_createVertexBuffer(vk->allocator, vk->device, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &vk->swapchainProperties.memoryProperties);
+	os_assert(vk->shaderPipeline.vb.size >= vk->currentMesh.vertices.size() * sizeof(Vertex));
 
-	vk->meshPipeline.vb = vk_createVertexBuffer(vk->allocator, vk->device, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &vk->swapchainProperties.memoryProperties);
-	os_assert(vk->meshPipeline.vb.size >= vk->currentMesh.vertices.size * sizeof(Vertex));
+	vk->shaderPipeline.ib = vk_createIndexBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
+	os_assert(vk->shaderPipeline.ib.size >= vk->currentMesh.indices.size() * sizeof(u32));
 
-	vk->meshPipeline.ib = vk_createIndexBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
-	os_assert(vk->meshPipeline.ib.size >= vk->currentMesh.indices.size * sizeof(u32));
+    if (vk->meshShadingSupported)
+    {
+        vk->shaderPipeline.mb = vk_createMeshBuffer(vk->allocator, vk->device, size, 0,
+                                                    &vk->swapchainProperties.memoryProperties);
+        os_assert(vk->shaderPipeline.mb.size >= vk->currentMesh.meshlets.size * sizeof(Meshlet));
+    }
 
-#if NV_MESH_SHADING
-	vk->meshPipeline.mb = vk_createMeshBuffer(vk->allocator, vk->device, size, 0, &vk->swapchainProperties.memoryProperties);
-	os_assert(vk->meshPipeline.mb.size >= vk->currentMesh.meshlets.size * sizeof(Meshlet));
-#endif
-
-    vk->meshPipeline.transferBuffer = vk_createTransferBuffer(vk->allocator, vk->device, size, &vk->swapchainProperties.memoryProperties);
-    VKCHECK(vkMapMemory(vk->device, vk->meshPipeline.transferBuffer.memory, 0, size, 0, &vk->meshPipeline.transferBuffer.data));
+    vk->shaderPipeline.transferBuffer = vk_createTransferBuffer(vk->allocator, vk->device, size, &vk->swapchainProperties.memoryProperties);
+    VKCHECK(vkMapMemory(vk->device, vk->shaderPipeline.transferBuffer.memory, 0, size, 0, &vk->shaderPipeline.transferBuffer.data));
 
     copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
                          vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
-                         &vk->meshPipeline.vb, &vk->meshPipeline.transferBuffer, vk->currentMesh.vertices.data(), vk->currentMesh.vertices.size() * sizeof(Vertex));
+                         &vk->shaderPipeline.vb, &vk->shaderPipeline.transferBuffer, vk->currentMesh.vertices.data(), vk->currentMesh.vertices.size() * sizeof(Vertex));
 
 	copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
-	        vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
-	        &vk->meshPipeline.ib, &vk->meshPipeline.transferBuffer, vk->currentMesh.indices.data(), vk->currentMesh.indices.size() * sizeof(u32));
-
-
-#if NV_MESH_SHADING
-    copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
                          vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
-                         &vk->meshPipeline.mb, &vk->meshPipeline.transferBuffer, vk->currentMesh.meshlets.data(), vk->currentMesh.meshlets.size() * sizeof(Meshlet));
-#endif
+                         &vk->shaderPipeline.ib, &vk->shaderPipeline.transferBuffer, vk->currentMesh.indices.data(), vk->currentMesh.indices.size() * sizeof(u32));
+
+	if (vk->meshShadingSupported)
+	{
+        copyToTransferBuffer(vk->allocator, vk->device, vk->commandPools[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+                             vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
+                             &vk->shaderPipeline.mb, &vk->shaderPipeline.transferBuffer, vk->currentMesh.meshlets.data(), vk->currentMesh.meshlets.size() * sizeof(Meshlet));
+	}
 }
 
 void vk_renderModelNVMesh(vulkan_renderer* vk)
@@ -235,64 +242,69 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
 	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->graphicsPipeline);
-
 	VkDescriptorBufferInfo vbInfo;
-    vbInfo.buffer = vk->meshPipeline.vb.buffer;
+    vbInfo.buffer = vk->shaderPipeline.vb.buffer;
     vbInfo.offset = 0;
-    vbInfo.range = vk->meshPipeline.vb.size;
+    vbInfo.range = vk->shaderPipeline.vb.size;
 
-#if NV_MESH_SHADING
-	VkDescriptorBufferInfo mbInfo;
-    mbInfo.buffer = vk->meshPipeline.mb.buffer;
-    mbInfo.offset = 0;
-    mbInfo.range = vk->meshPipeline.mb.size;
+	if (vk->meshShadingEnabled)
+    {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->meshShadingPipeline.pipeline);
 
-	VkWriteDescriptorSet descriptors[2];
-	// Vertex buffer
-    descriptors[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptors[0].pNext = null;
-    descriptors[0].dstSet = null;
-    descriptors[0].dstBinding = 0;
-    descriptors[0].dstArrayElement = 0;
-    descriptors[0].descriptorCount = 1;
-    descriptors[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptors[0].pImageInfo = null;
-    descriptors[0].pBufferInfo = &vbInfo;
-    descriptors[0].pTexelBufferView = null;
+	    VkDescriptorBufferInfo mbInfo;
+        mbInfo.buffer = vk->shaderPipeline.mb.buffer;
+        mbInfo.offset = 0;
+        mbInfo.range = vk->shaderPipeline.mb.size;
 
-    descriptors[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptors[1].pNext = null;
-    descriptors[1].dstSet = null;
-    descriptors[1].dstBinding = 1;
-    descriptors[1].dstArrayElement = 0;
-    descriptors[1].descriptorCount = 1;
-    descriptors[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptors[1].pImageInfo = null;
-    descriptors[1].pBufferInfo = &mbInfo;
-    descriptors[1].pTexelBufferView = null;
+	    VkWriteDescriptorSet descriptors[2];
+	    // Vertex buffer
+        descriptors[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptors[0].pNext = null;
+        descriptors[0].dstSet = null;
+        descriptors[0].dstBinding = 0;
+        descriptors[0].dstArrayElement = 0;
+        descriptors[0].descriptorCount = 1;
+        descriptors[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptors[0].pImageInfo = null;
+        descriptors[0].pBufferInfo = &vbInfo;
+        descriptors[0].pTexelBufferView = null;
 
-	vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->graphicsPipelineLayout, 0, ARRAYSIZE(descriptors), descriptors);
+        descriptors[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptors[1].pNext = null;
+        descriptors[1].dstSet = null;
+        descriptors[1].dstBinding = 1;
+        descriptors[1].dstArrayElement = 0;
+        descriptors[1].descriptorCount = 1;
+        descriptors[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptors[1].pImageInfo = null;
+        descriptors[1].pBufferInfo = &mbInfo;
+        descriptors[1].pTexelBufferView = null;
 
-	vkCmdDrawMeshTasksNV(commandBuffer, vk->currentMesh.meshlets.size(), 0);
-#else
-	VkWriteDescriptorSet descriptors[1];
-    descriptors[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptors[0].pNext = null;
-    descriptors[0].dstSet = null;
-    descriptors[0].dstBinding = 0;
-    descriptors[0].dstArrayElement = 0;
-    descriptors[0].descriptorCount = 1;
-    descriptors[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptors[0].pImageInfo = null;
-    descriptors[0].pBufferInfo = &vbInfo;
-    descriptors[0].pTexelBufferView = null;
+	    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->meshShadingPipeline.layout, 0, ARRAYSIZE(descriptors), descriptors);
 
-	vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->graphicsPipelineLayout, 0, ARRAYSIZE(descriptors), descriptors);
+	    vkCmdDrawMeshTasksNV(commandBuffer, vk->currentMesh.meshlets.size(), 0);
+    }
+	else
+    {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->traditionalPipeline.pipeline);
 
-	vkCmdBindIndexBuffer(commandBuffer, vk->meshPipeline.ib.buffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(commandBuffer, vk->currentMesh.indices.size(), 1, 0, 0, 0);
-#endif
+        VkWriteDescriptorSet descriptors[1];
+        descriptors[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptors[0].pNext = null;
+        descriptors[0].dstSet = null;
+        descriptors[0].dstBinding = 0;
+        descriptors[0].dstArrayElement = 0;
+        descriptors[0].descriptorCount = 1;
+        descriptors[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptors[0].pImageInfo = null;
+        descriptors[0].pBufferInfo = &vbInfo;
+        descriptors[0].pTexelBufferView = null;
+
+        vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->traditionalPipeline.layout, 0, ARRAYSIZE(descriptors), descriptors);
+
+        vkCmdBindIndexBuffer(commandBuffer, vk->shaderPipeline.ib.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(commandBuffer, vk->currentMesh.indices.size(), 1, 0, 0, 0);
+    }
 
 	vkCmdEndRenderPass(commandBuffer);
 	vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 0, 0, 1, &vk->endRenderBarriers[currentImageIndex]);

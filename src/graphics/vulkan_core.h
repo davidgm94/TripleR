@@ -1,5 +1,5 @@
 #define NV_RTX 0
-#define NV_MESH_SHADING 0
+#define NV_MESH_SHADING 1
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
 #if NDEBUG
@@ -254,7 +254,7 @@ static inline VkDeviceQueueCreateInfo getDeviceQueueCreateInfo()
 	
 	return queueInfo;
 }
-static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysicalDevice physicalDevice, VkInstance instance, VkDeviceQueueCreateInfo* queueCreateInfoArray, u32 queueCreateInfoCount)
+static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysicalDevice physicalDevice, VkInstance instance, VkDeviceQueueCreateInfo* queueCreateInfoArray, u32 queueCreateInfoCount, bool meshShadingSupported)
 {
 	u32 extensionCount = 0;
 	VKCHECK(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr));
@@ -278,20 +278,19 @@ static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysi
 		os_printf("%s [%u]: %s\n", layers[i].layerName, layers[i].specVersion, layers[i].description);
 	}
 
-	const char* enabledExtensions[] =
+	vector<const char*> enabledExtensions =
 	{
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 		VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
 		VK_KHR_8BIT_STORAGE_EXTENSION_NAME,
         VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
-#if NV_MESH_SHADING
-		VK_NV_MESH_SHADER_EXTENSION_NAME,
-#endif
 	};
+    if (meshShadingSupported)
+        enabledExtensions.push_back(VK_NV_MESH_SHADER_EXTENSION_NAME);
 
 	os_printf("\nENABLED DEVICE EXTENSIONS:\n");
-	for (u32 i = 0; i < ARRAYCOUNT(enabledExtensions); i++)
+	for (u32 i = 0; i < enabledExtensions.size() ; i++)
     {
 	    os_printf("%s\n", enabledExtensions[i]);
     }
@@ -309,10 +308,9 @@ static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysi
     VkPhysicalDeviceFloat16Int8FeaturesKHR featuresf16i8 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR };
     featuresf16i8.shaderInt8 = true;
 
-#if NV_MESH_SHADING
+    // Only used in mesh shading device
     VkPhysicalDeviceMeshShaderFeaturesNV featuresMesh = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV };
 	featuresMesh.meshShader = true;
-#endif
 
 	VkDeviceCreateInfo createInfo;
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -322,17 +320,16 @@ static inline VkDevice vk_createDevice(VkAllocationCallbacks* allocator, VkPhysi
     createInfo.pQueueCreateInfos = queueCreateInfoArray;
     createInfo.enabledLayerCount = 0;
     createInfo.ppEnabledLayerNames = null;
-    createInfo.enabledExtensionCount = ARRAYCOUNT(enabledExtensions);
-    createInfo.ppEnabledExtensionNames = enabledExtensions;
+    createInfo.enabledExtensionCount = enabledExtensions.size();
+    createInfo.ppEnabledExtensionNames = enabledExtensions.data();
     createInfo.pEnabledFeatures = null;
     createInfo.pNext = &features;
     features.pNext = &features16;
     features16.pNext = &features8;
     features8.pNext = &featuresf16i8;
 
-#if NV_MESH_SHADING
-    featuresf16i8.pNext = &featuresMesh;
-#endif
+    if (meshShadingSupported)
+        featuresf16i8.pNext = &featuresMesh;
 
 	VkDevice device;
 	VKCHECK(vkCreateDevice(physicalDevice, &createInfo, allocator, &device));
@@ -2148,7 +2145,13 @@ typedef struct
 	VulkanBufferWithData ib;
 	VulkanBufferWithData mb;
 	VulkanBufferWithData transferBuffer;
-} VulkanMeshPipeline;
+} VulkanShaderPipeline;
+
+typedef struct {
+    VkDescriptorSetLayout setLayout;
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+} VulkanPipeline;
 
 // TODO: modify
 static inline VkRenderPass vk_setupRenderPass(VkAllocationCallbacks* allocator, VkDevice device,
@@ -2247,18 +2250,17 @@ static inline VkPipeline vk_createGraphicsPipeline(VkAllocationCallbacks* alloca
 	return pipeline;
 }
 
-static inline VkPipeline vk_createMeshGraphicsPipeline(VkAllocationCallbacks* allocator, VkDevice device, VkPipelineCache pipelineCache, VkRenderPass renderPass, VkShaderModule vsOrMs, VkShaderModule fs, VkPipelineLayout layout)
+static inline VkPipeline vk_createGraphicsPipeline(VkAllocationCallbacks* allocator, VkDevice device, VkPipelineCache pipelineCache, VkRenderPass renderPass, VkShaderModule vsOrMs, VkShaderModule fs, VkPipelineLayout layout, bool meshShadingSupported)
 {
 	VkGraphicsPipelineCreateInfo createInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 
 	VkPipelineShaderStageCreateInfo stages[2] = {};
 	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 
-#if NV_MESH_SHADING
-	stages[0].stage = VK_SHADER_STAGE_MESH_BIT_NV;
-#else
-	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-#endif
+    if (meshShadingSupported)
+	    stages[0].stage = VK_SHADER_STAGE_MESH_BIT_NV;
+    else
+	    stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
 
 	stages[0].module = vsOrMs;
 	stages[0].pName = "main";
@@ -2311,7 +2313,7 @@ static inline VkPipeline vk_createMeshGraphicsPipeline(VkAllocationCallbacks* al
 	createInfo.layout = layout;
 	createInfo.renderPass = renderPass;
 
-	VkPipeline pipeline = 0;
+	VkPipeline pipeline = nullptr;
 	VKCHECK(vkCreateGraphicsPipelines(device, pipelineCache, 1, &createInfo, allocator, &pipeline));
 
 	return pipeline;
@@ -2332,4 +2334,35 @@ static inline VkQueryPool vk_createTimestampQueryPool(VkAllocationCallbacks* all
 
 	return queryPool;
 
+}
+
+static inline vector<VkDescriptorSetLayoutBinding> vk_createDescriptorSetLayoutBindings(bool meshShadingEnabled)
+{
+    vector<VkDescriptorSetLayoutBinding> setBindings;
+    if (meshShadingEnabled)
+    {
+        setBindings.resize(2);
+        setBindings[0].binding = 0;
+        setBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        setBindings[0].descriptorCount = 1;
+        setBindings[0].stageFlags = VK_SHADER_STAGE_MESH_BIT_NV;
+        setBindings[0].pImmutableSamplers = null;
+
+        setBindings[1].binding = 1;
+        setBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        setBindings[1].descriptorCount = 1;
+        setBindings[1].stageFlags = VK_SHADER_STAGE_MESH_BIT_NV;
+        setBindings[1].pImmutableSamplers = null;
+    }
+    else
+    {
+        setBindings.resize(1);
+        setBindings[0].binding = 0;
+        setBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        setBindings[0].descriptorCount = 1;
+        setBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        setBindings[0].pImmutableSamplers = null;
+    }
+
+    return setBindings;
 }

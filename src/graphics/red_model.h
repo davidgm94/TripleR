@@ -145,9 +145,10 @@ void buildMeshlets(Mesh* mesh)
 }
 
 
-static inline Mesh loadMesh(const char* path)
+static inline Mesh loadMesh(const char* path, bool useMeshlets)
 {
 	Mesh mesh = loadObj(path);
-	buildMeshlets(&mesh);
+	if (useMeshlets)
+	    buildMeshlets(&mesh);
 	return mesh;
 }

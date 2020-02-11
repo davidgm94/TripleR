@@ -33,7 +33,7 @@ void vk_loadTriangle(vulkan_renderer* vk, os_window_handles* window, os_window_d
 
 	VkDeviceQueueCreateInfo queueCreateInfoArray[ARRAYCOUNT(availableQueues)];
 	vk_setupQueueCreation(queueCreateInfoArray, &vk->swapchainProperties.queueFamily, queuesToCreate, priorities);
-	vk->device = vk_createDevice(vk->allocator, vk->physicalDevice, vk->instance, queueCreateInfoArray, ARRAYCOUNT(queueCreateInfoArray));
+	vk->device = vk_createDevice(vk->allocator, vk->physicalDevice, vk->instance, queueCreateInfoArray, ARRAYCOUNT(queueCreateInfoArray), false);
 	vk->renderPass = vk_setupRenderPass(vk->allocator, vk->device, vk->swapchainRequirements.surfaceFormat.format);
 	vk_getDeviceQueues(vk->device, vk->swapchainProperties.queueFamily.indices, vk->queues);
     vk->swapchain = vk_createSwapchain(vk->allocator, vk->device, vk->surface, &vk->swapchainRequirements, nullptr);
@@ -45,8 +45,8 @@ void vk_loadTriangle(vulkan_renderer* vk, os_window_handles* window, os_window_d
 
 	raw_str vsFile = os_readFile("src/graphics/traditionalPipeline/triangle.vert.spv");
 	raw_str fsFile = os_readFile("src/graphics/traditionalPipeline/triangle.frag.spv");
-	vk->traditionalPipeline.vs = vk_createShaderModule(vk->allocator, vk->device, vsFile.data, vsFile.size);
-	vk->traditionalPipeline.fs = vk_createShaderModule(vk->allocator, vk->device, fsFile.data, fsFile.size);
+	vk->shaderPipeline.vs = vk_createShaderModule(vk->allocator, vk->device, vsFile.data, vsFile.size);
+	vk->shaderPipeline.fs = vk_createShaderModule(vk->allocator, vk->device, fsFile.data, fsFile.size);
 	free(vsFile.data);
 	free(fsFile.data);
 
@@ -59,10 +59,10 @@ void vk_loadTriangle(vulkan_renderer* vk, os_window_handles* window, os_window_d
 	setBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	setBindings[0].pImmutableSamplers = null;
 
-	vk->descriptorSetLayout = vk_createDescriptorSetLayout(vk->allocator, vk->device, setBindings, ARRAYCOUNT(setBindings), VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-	vk->graphicsPipelineLayout = vk_createPipelineLayout(vk->allocator, vk->device, &vk->descriptorSetLayout, 1, null, 0);
+	vk->traditionalPipeline.setLayout = vk_createDescriptorSetLayout(vk->allocator, vk->device, setBindings, ARRAYCOUNT(setBindings), VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
+	vk->traditionalPipeline.layout = vk_createPipelineLayout(vk->allocator, vk->device, &vk->traditionalPipeline.setLayout, 1, null, 0);
 
-	vk->graphicsPipeline = vk_createGraphicsPipeline(vk->allocator, vk->device, pipelineCache, vk->renderPass, vk->traditionalPipeline.vs, vk->traditionalPipeline.fs, vk->graphicsPipelineLayout);
+	vk->traditionalPipeline.pipeline = vk_createGraphicsPipeline(vk->allocator, vk->device, pipelineCache, vk->renderPass, vk->shaderPipeline.vs, vk->shaderPipeline.fs, vk->traditionalPipeline.layout);
 
 	// COMMANDS AND QUEUES
 	vk->imageAcquireSemaphore = vk_createSemaphore(vk->allocator, vk->device);
@@ -107,7 +107,7 @@ void vk_renderTriangle(vulkan_renderer* vk)
 	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->graphicsPipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->traditionalPipeline.pipeline);
 
 	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
