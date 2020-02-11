@@ -243,7 +243,9 @@ static void os_saveKeyEvent(os_keyboard_state* keyboardState, os_key keyToUpdate
 
 static bool os_processKeyboardState(os_keyboard_state* keyboardState)
 {
-    const bool isPressedM = (keyboardState->keyState[KEYBOARD_M] << 0) == 1UL;
+    const u8 M = keyboardState->keyState[KEYBOARD_M];
+    const bool isPressedM = (M << 0) == 1UL;
+    os_printf("M: %u\n", M);
     return isPressedM;
 }
 
