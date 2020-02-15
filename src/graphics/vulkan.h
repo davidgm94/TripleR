@@ -36,6 +36,33 @@ typedef struct
 	bool meshShadingEnabled;
 } vulkan_renderer;
 
+typedef struct
+{
+	bool meshShadingSupported;
+	bool meshShadingEnabled;
+} key_user_data;
+
+void os_handleKeyEvents(void* windowApplication, os_key key, int scancode, int action, int mods)
+{
+	win32_window_application* winApp = (win32_window_application*)windowApplication;
+	key_user_data* keyUserData = (key_user_data*)winApp->keyUserData;
+
+	switch (key)
+	{
+		case (KEYBOARD_M):
+		{
+			if (action == (int)os_key_event::PRESS)
+			{
+				if (keyUserData->meshShadingSupported)
+				{
+					keyUserData->meshShadingEnabled = !keyUserData->meshShadingEnabled;
+				}
+			}
+		} break;
+		default: ;
+	}
+}
+
 void vk_loadTriangle(vulkan_renderer* vk, os_window_handles* window, os_window_dimensions* windowDimension);
 void vk_renderTriangle(vulkan_renderer* vk);
 void vk_loadModel(vulkan_renderer* vk, os_window_handles* window, os_window_dimensions* windowDimension);
@@ -195,12 +222,13 @@ void vk_loadModelNVMesh(vulkan_renderer* vk, os_window_handles* window, os_windo
                              vk->commandBuffers[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS], vk->queues[VULKAN_QUEUE_FAMILY_INDEX_GRAPHICS],
                              &vk->shaderPipeline.mb, &vk->shaderPipeline.transferBuffer, vk->currentMesh.meshlets.data(), vk->currentMesh.meshlets.size() * sizeof(Meshlet));
 	}
+
+	win32.keyUserData = &vk->meshShadingSupported;
+	win32.callbacks.keyEventHandler = os_handleKeyEvents;
 }
 
 void vk_renderModelNVMesh(vulkan_renderer* vk)
 {
-    if (os_processKeyboardState(&win32.keyboardState))
-        vk->meshShadingEnabled = !vk->meshShadingEnabled;
     static double frameAvgCPU = 0;
     static double frameAvgGPU = 0;
 
@@ -249,6 +277,7 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
     vbInfo.offset = 0;
     vbInfo.range = vk->shaderPipeline.vb.size;
 
+    const int drawCount = 1000;
 	if (vk->meshShadingEnabled)
     {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->meshShadingPipeline.pipeline);
@@ -284,7 +313,8 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
 
 	    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->meshShadingPipeline.layout, 0, ARRAYSIZE(descriptors), descriptors);
 
-	    vkCmdDrawMeshTasksNV(commandBuffer, vk->currentMesh.meshlets.size(), 0);
+	    for (int i = 0; i < drawCount; i++)
+	        vkCmdDrawMeshTasksNV(commandBuffer, vk->currentMesh.meshlets.size(), 0);
     }
 	else
     {
@@ -305,7 +335,8 @@ void vk_renderModelNVMesh(vulkan_renderer* vk)
         vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk->traditionalPipeline.layout, 0, ARRAYSIZE(descriptors), descriptors);
 
         vkCmdBindIndexBuffer(commandBuffer, vk->shaderPipeline.ib.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(commandBuffer, vk->currentMesh.indices.size(), 1, 0, 0, 0);
+        for (int i = 0; i < drawCount; i++)
+            vkCmdDrawIndexed(commandBuffer, vk->currentMesh.indices.size(), 1, 0, 0, 0);
     }
 
 	vkCmdEndRenderPass(commandBuffer);

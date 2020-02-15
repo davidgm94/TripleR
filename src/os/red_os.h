@@ -470,13 +470,19 @@ enum os_key
 	// (...)
 };
 
-enum os_key_event
+enum class os_key_event
 {
-    KEY_UP = 0x00,
-    KEY_DOWN = 0x01,
-    KEY_WAS_DOWN = 0x02,
-    KEY_WAS_UP = 0x03,
+    RELEASE = 0,
+    PRESS = 1,
+    REPEAT = 2,
 };
+
+typedef void os_keyEventHandler(void* windowApplication, os_key, int scancode, int action, int mods);
+
+typedef struct
+{
+    os_keyEventHandler* keyEventHandler;
+} os_callbacks;
 
 void os_saveKeyEvent(os_keyboard_state* keyboardState, os_key keyToUpdate, os_key_event keyEvent);
 bool os_processKeyboardState(os_keyboard_state* keyboardState);

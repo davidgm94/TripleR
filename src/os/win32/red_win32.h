@@ -25,12 +25,15 @@ typedef struct
 	i64 performanceFrequency;
 	i64 firstPerformanceCounter;
 } win32_timer;
+
 typedef struct
 {
     os_keyboard_state keyboardState;
+    os_callbacks callbacks;
 	win32_native_handles handles;
 	win32_application_state applicationState;
 	win32_timer timer;
+	void* keyUserData;
 } win32_window_application;
 
 static win32_window_application win32;
@@ -44,6 +47,27 @@ static inline double getTime(i64 qpc)
 #define CompletePastReadsBeforeFutureReads _ReadBarrier()
 
 win32_window_application* win32_startup(const char* windowTitle, os_window_dimensions* window, win32_window_application* win32);
+
+static void os_saveKeyEvent(win32_window_application* windowApplication, os_key key, int scancode, int action, int mods)
+{
+    bool repeated = false;
+
+    if (action == (int)os_key_event::RELEASE && windowApplication->keyboardState.keyState[key] == (int)os_key_event::RELEASE)
+    {
+        return;
+    }
+
+    repeated = action == (int)os_key_event::PRESS && windowApplication->keyboardState.keyState[key] == (int)os_key_event::PRESS;
+    windowApplication->keyboardState.keyState[key] = (char) action;
+
+    if (repeated)
+    {
+        action = (int)os_key_event::REPEAT;
+    }
+
+    if (windowApplication->callbacks.keyEventHandler)
+        windowApplication->callbacks.keyEventHandler(windowApplication, key, scancode, action, mods);
+}
 
 LRESULT CALLBACK win32_messageCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -69,17 +93,20 @@ LRESULT CALLBACK win32_messageCallback(HWND window, UINT message, WPARAM wParam,
 			(void)SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)(p_create_struct->lpCreateParams));
 		} break;
 	    case (WM_KEYDOWN):
-        {
-            os_key_event keyEvent = KEY_DOWN;
-            os_key keyToUpdate = (os_key)wParam;
-            os_saveKeyEvent(&windowApplication->keyboardState, keyToUpdate, keyEvent);
-        } break;
 	    case (WM_KEYUP):
+	    case (WM_SYSKEYDOWN):
+	    case (WM_SYSKEYUP):
         {
-            os_key_event keyEvent = KEY_UP;
-            os_key keyToUpdate = (os_key)wParam;
-            os_saveKeyEvent(&windowApplication->keyboardState, keyToUpdate, keyEvent);
-        }
+            const int action = (HIWORD(lParam) & KF_UP) ? (int)os_key_event::RELEASE : (int)os_key_event::PRESS;
+            int scancode = (HIWORD(lParam) & (KF_EXTENDED | 0xff));
+            if (!scancode)
+            {
+                scancode = MapVirtualKeyW((UINT)wParam, MAPVK_VK_TO_VSC);
+            }
+
+            os_key key = (os_key)wParam;
+            os_saveKeyEvent(windowApplication, key, scancode, action, 0);
+        } break;
 		default:
 		{
 
@@ -131,6 +158,7 @@ win32_window_application* win32_startup(const char* windowTitle, os_window_dimen
 	win32_app->applicationState.s[APPLICATION_STATE_FINISHED] = false;
 	win32_app->applicationState.s[APPLICATION_STATE_RESIZING] = false;
 	win32_app->applicationState.s[APPLICATION_STATE_PAUSED] = false;
+    win32_app->callbacks.keyEventHandler = null;
 	(void)QueryPerformanceFrequency((LARGE_INTEGER*)&win32_app->timer.performanceFrequency);
 	(void)QueryPerformanceCounter((LARGE_INTEGER*)&win32_app->timer.firstPerformanceCounter);
 	win32_app->handles.window = win32_createWindow(win32_app->handles.winmainArguments.instance, win32_messageCallback, (u32)window->width, (u32)window->height, windowTitle, win32_app);
@@ -203,7 +231,6 @@ static void os_fillCurrentWorkingDirectory(void)
     os_printf("%s\n", sourceDirectory);
 }
 
-
 static void os_fillShadersDirectory(void)
 {
     char buffer[1000];
@@ -236,17 +263,11 @@ static void os_getAssetPath(const char* assetName, char* buffer)
     os_appendFileOrDirectory(buffer, assetName);
 }
 
-static void os_saveKeyEvent(os_keyboard_state* keyboardState, os_key keyToUpdate, os_key_event keyEvent)
-{
-    keyboardState->keyState[keyToUpdate] |= keyEvent << 0;
-}
-
 static bool os_processKeyboardState(os_keyboard_state* keyboardState)
 {
     const u8 M = keyboardState->keyState[KEYBOARD_M];
-    const bool isPressedM = (M << 0) == 1UL;
-    os_printf("M: %u\n", M);
-    return isPressedM;
+    const bool keyPressedM = (M << 0) == 0UL;
+    return keyPressedM;
 }
 
 #endif

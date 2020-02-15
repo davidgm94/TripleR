@@ -2306,7 +2306,7 @@ static inline VkPipeline vk_createGraphicsPipeline(VkAllocationCallbacks* alloca
 	VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
 	VkPipelineDynamicStateCreateInfo dynamicState = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
-	dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
+	dynamicState.dynamicStateCount = ARRAYCOUNT(dynamicStates);
 	dynamicState.pDynamicStates = dynamicStates;
 	createInfo.pDynamicState = &dynamicState;
 
